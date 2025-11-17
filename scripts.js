@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const tickerInput = document.getElementById('ticker-input');
                 tickerInput.value = ativo.ticker;
-                tickerInput.readOnly = true; // Prevent changing the primary key
+                // tickerInput.readOnly = false; // Permite a edição do ticker
 
                 document.getElementById('class-select').value = ativo.classe;
 
@@ -116,12 +116,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (currentEditTicker) {
             // --- UPDATE LOGIC ---
+            const newTicker = tickerInput.value.toUpperCase();
+
+            // Validação: Verifica se o novo ticker já existe em OUTRO ativo.
+            const tickerExists = ativos.some(
+                (ativo) => ativo.ticker === newTicker && ativo.ticker !== currentEditTicker
+            );
+
+            if (tickerExists) {
+                alert(`O ticker "${newTicker}" já está cadastrado. Por favor, insira um ticker diferente.`);
+                return; // Interrompe a execução se o ticker já existir
+            }
+
             const assetToUpdate = ativos.find(a => a.ticker === currentEditTicker);
             if (assetToUpdate) {
+                assetToUpdate.ticker = newTicker;
                 assetToUpdate.classe = classSelect.value;
             }
         } else {
             // --- CREATE LOGIC (existing logic) ---
+            const newTicker = tickerInput.value.toUpperCase();
+            if (ativos.some(ativo => ativo.ticker === newTicker)) {
+                alert(`O ticker "${newTicker}" já está cadastrado.`);
+                return;
+            }
             const novoAtivo = {
                 ticker: tickerInput.value.toUpperCase(),
                 classe: classSelect.value,
