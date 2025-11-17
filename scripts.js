@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // Limpa o conteúdo atual para evitar duplicação
         ativosContent.innerHTML = '';
 
+        // Se não houver ativos, exibe a mensagem e encerra a função
+        if (ativos.length === 0) {
+            ativosContent.innerHTML = `<p class="text-center text-muted mt-3">Nenhum Ativo Cadastrado.</p>`;
+            return;
+        }
+
+        // Se houver ativos, cria e renderiza a lista
         const listGroup = document.createElement('ul');
         listGroup.className = 'list-group list-group-flush';
 
