@@ -1,11 +1,94 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="./styles.css">
+
+    <title>DashInvest - Dashboard de Investimentos</title>
 </head>
+
 <body>
-    
+
+    <!-- Cabeçalho do DashInvest - Dashboard de Investimentos -->
+    <header>
+        <div class="banner">
+            <div class="title">
+                <h1>DashInvest</h1>
+            </div>
+            <!-- Fonte: https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1 -->
+            <img src="./img/invest-banner.webp"
+                alt="Notebook exibindo um dashboard de investimentos com gráficos e dados financeiros.">
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="container mt-5">
+        <div class="row text-center mb-4">
+            <div class="col">
+                <h2>Visão Geral da Carteira</h2>
+            </div>
+        </div>
+        <div class="row">
+            <!-- Coluna de Ativos Cadastrados -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3>Ativos Cadastrados</h3>
+                    </div>
+                    <div class="card-body" id="ativos-content">
+                        <!-- O conteúdo da lista de ativos será inserido aqui via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna da Carteira -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3>Carteira</h3>
+                    </div>
+                    <div class="card-body" id="carteira-content">
+                        <p>Visualização detalhada da composição da sua carteira atual.</p>
+                        <!-- Gráficos e detalhes da carteira virão aqui -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna de Resumo -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3>Resumo dos Investimentos</h3>
+                    </div>
+                    <div class="card-body" id="resumo-content">
+                        <p>Principais indicadores e performance geral dos seus investimentos.</p>
+                        <!-- Indicadores de resumo virão aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">&copy; 2025 DashInvest. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous">
+        </script>
+    <script src="./scripts.js"></script>
 </body>
+
 </html>

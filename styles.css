@@ -1,0 +1,54 @@
+/* Estilização do Banner */
+.banner {
+    width: 100%;
+    height: 200px;
+    /* Você pode ajustar essa altura como preferir */
+    overflow: hidden;
+    /* Esconde partes da imagem que excederem o contêiner */
+    position: relative;
+    /* Necessário para centralizar o título sobre a imagem depois */
+}
+
+.banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Redimensiona a imagem para cobrir o contêiner sem distorcer */
+    object-position: center;
+    /* Centraliza a imagem dentro do contêiner */
+    filter: brightness(0.7);
+    /* Escurece a imagem para o texto se destacar mais */
+}
+
+/* Estilização do Título sobre o Banner */
+.title {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    /* Garante que o título fique na frente da imagem */
+    text-align: center;
+    width: 100%;
+    /* Ocupa toda a largura para aplicar padding */
+    padding: 0 1rem; /* Adiciona espaçamento lateral */
+}
+
+.title h1 {
+    color: white;
+    font-size: 4.5rem;
+    /* Tamanho da fonte aumentado para destaque */
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+    /* Sombra para contraste */
+    letter-spacing: 3px;
+    /* Adiciona um respiro entre as letras */
+    font-weight: 700;
+}
+
+/* Media Query para telas menores (ex: celulares) */
+@media (max-width: 576px) {
+    .title h1 {
+        font-size: 3rem;
+        /* Reduz o tamanho da fonte em telas pequenas */
+    }
+}
