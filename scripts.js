@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const addAssetForm = document.getElementById('add-asset-form');
     const addAssetModalEl = document.getElementById('addAssetModal');
     const addAssetModal = new bootstrap.Modal(addAssetModalEl);
+    const modalTitle = document.getElementById('addAssetModalLabel');
+    const modalSubmitBtn = addAssetModalEl.querySelector('button[type="submit"]');
+    const deleteAssetBtn = document.getElementById('delete-asset-btn');
+
+    // State variable to track if we are editing an asset
+    let currentEditTicker = null;
 
     /**
      * Função para simular a busca de dados de um ativo em uma API externa.
@@ -50,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         ativos.forEach(ativo => {
             const listItem = document.createElement('li');
+            // A classe 'list-group-item-action' foi removida pois a ação agora é no botão
             listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
 
             // Constrói o HTML para cada item da lista
@@ -64,8 +71,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="d-flex align-items-center">
                     <span class="badge ${badgeColor} rounded-pill">${valorAtivo}</span>
-                    <button class="btn btn-sm btn-outline-danger border-0 ms-2 delete-btn" data-ticker="${ativo.ticker}" title="Remover Ativo">
-                        <i class="bi bi-trash" data-ticker="${ativo.ticker}"></i>
+                    <button class="btn btn-sm btn-outline-primary border-0 ms-2 edit-btn" data-ticker="${ativo.ticker}" title="Editar ${ativo.ticker}">
+                        <i class="bi bi-pencil-square"></i>
                     </button>
                 </div>
             `;
@@ -75,47 +82,95 @@ document.addEventListener('DOMContentLoaded', function () {
         ativosContent.appendChild(listGroup);
     }
 
-    // Event listener para exclusão de ativos (usando delegação de eventos)
+    // Event listener para ações na lista de ativos (usando delegação de eventos)
     ativosContent.addEventListener('click', function (event) {
-        // Verifica se o elemento clicado (ou seu pai) é um botão de exclusão
-        const deleteButton = event.target.closest('.delete-btn');
-        if (deleteButton) {
-            const tickerParaRemover = deleteButton.dataset.ticker;
+        // Verifica se o clique foi no botão de editar
+        const editButton = event.target.closest('.edit-btn');
+        if (editButton) {
+            const tickerParaEditar = editButton.dataset.ticker;
+            const ativo = ativos.find(a => a.ticker === tickerParaEditar);
+            if (ativo) {
+                currentEditTicker = ativo.ticker; // Set state to "editing"
 
-            // Filtra o array, mantendo apenas os ativos que NÃO têm o ticker a ser removido
-            ativos = ativos.filter(ativo => ativo.ticker !== tickerParaRemover);
+                // Configura o modal para o modo de edição
+                modalTitle.textContent = 'Editar Ativo';
+                modalSubmitBtn.textContent = 'Atualizar Ativo';
 
-            // Re-renderiza a lista para refletir a remoção
-            renderAtivos();
+                const tickerInput = document.getElementById('ticker-input');
+                tickerInput.value = ativo.ticker;
+                tickerInput.readOnly = true; // Prevent changing the primary key
+
+                document.getElementById('class-select').value = ativo.classe;
+
+                deleteAssetBtn.classList.remove('d-none'); // Mostra o botão de excluir
+                addAssetModal.show();
+            }
         }
     });
 
     // Event listener para o envio do formulário de adição de ativo
     addAssetForm.addEventListener('submit', async function (event) {
         event.preventDefault(); // Previne o recarregamento da página
-
         const tickerInput = document.getElementById('ticker-input');
         const classSelect = document.getElementById('class-select');
 
-        const novoAtivo = {
-            ticker: tickerInput.value.toUpperCase(),
-            classe: classSelect.value,
-            nome: null,
-            valor: null
-        };
+        if (currentEditTicker) {
+            // --- UPDATE LOGIC ---
+            const assetToUpdate = ativos.find(a => a.ticker === currentEditTicker);
+            if (assetToUpdate) {
+                assetToUpdate.classe = classSelect.value;
+            }
+        } else {
+            // --- CREATE LOGIC (existing logic) ---
+            const novoAtivo = {
+                ticker: tickerInput.value.toUpperCase(),
+                classe: classSelect.value,
+                nome: null,
+                valor: null
+            };
 
-        try {
-            const data = await fetchAtivoData(novoAtivo.ticker);
-            novoAtivo.nome = data.nome;
-            novoAtivo.valor = data.valor;
-        } catch (error) {
-            console.warn(error); // Apenas loga o aviso no console
-        } finally {
-            ativos.push(novoAtivo); // Adiciona o ativo ao array (com ou sem dados da API)
-            renderAtivos(); // Re-renderiza a lista
-            addAssetModal.hide(); // Esconde o modal
-            addAssetForm.reset(); // Limpa o formulário
+            try {
+                const data = await fetchAtivoData(novoAtivo.ticker);
+                novoAtivo.nome = data.nome;
+                novoAtivo.valor = data.valor;
+            } catch (error) {
+                console.warn(error);
+            } finally {
+                ativos.push(novoAtivo);
+            }
         }
+
+        renderAtivos();
+        addAssetModal.hide();
+    });
+
+    // Event listener para o botão de excluir DENTRO do modal
+    deleteAssetBtn.addEventListener('click', function () {
+        if (!currentEditTicker) return;
+
+        // Adiciona uma confirmação para segurança
+        const isConfirmed = confirm(`Tem certeza que deseja excluir o ativo ${currentEditTicker}? Esta ação não pode ser desfeita.`);
+
+        if (isConfirmed) {
+            ativos = ativos.filter(ativo => ativo.ticker !== currentEditTicker);
+            renderAtivos();
+            addAssetModal.hide(); // Fecha o modal após a exclusão
+        }
+    });
+
+
+    // Reset modal to "add" state when it's closed
+    addAssetModalEl.addEventListener('hidden.bs.modal', function () {
+        currentEditTicker = null; // Reset state
+        addAssetForm.reset();
+
+        modalTitle.textContent = 'Adicionar Novo Ativo';
+        modalSubmitBtn.textContent = 'Salvar Ativo';
+
+        const tickerInput = document.getElementById('ticker-input');
+        tickerInput.readOnly = false;
+
+        deleteAssetBtn.classList.add('d-none'); // Garante que o botão de excluir esteja oculto
     });
 
     // Renderiza a lista inicial de ativos quando a página carrega
