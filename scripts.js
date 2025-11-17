@@ -58,17 +58,37 @@ document.addEventListener('DOMContentLoaded', function () {
             const badgeColor = ativo.valor ? 'bg-primary' : 'bg-secondary';
 
             listItem.innerHTML = `
-                <div>
+                <div class="me-auto">
                     <span class="fw-bold">${ativo.ticker}</span>
                     <small class="text-muted">${nomeAtivo}</small>
                 </div>
-                <span class="badge ${badgeColor} rounded-pill">${valorAtivo}</span>
+                <div class="d-flex align-items-center">
+                    <span class="badge ${badgeColor} rounded-pill">${valorAtivo}</span>
+                    <button class="btn btn-sm btn-outline-danger border-0 ms-2 delete-btn" data-ticker="${ativo.ticker}" title="Remover Ativo">
+                        <i class="bi bi-trash" data-ticker="${ativo.ticker}"></i>
+                    </button>
+                </div>
             `;
             listGroup.appendChild(listItem);
         });
 
         ativosContent.appendChild(listGroup);
     }
+
+    // Event listener para exclusão de ativos (usando delegação de eventos)
+    ativosContent.addEventListener('click', function (event) {
+        // Verifica se o elemento clicado (ou seu pai) é um botão de exclusão
+        const deleteButton = event.target.closest('.delete-btn');
+        if (deleteButton) {
+            const tickerParaRemover = deleteButton.dataset.ticker;
+
+            // Filtra o array, mantendo apenas os ativos que NÃO têm o ticker a ser removido
+            ativos = ativos.filter(ativo => ativo.ticker !== tickerParaRemover);
+
+            // Re-renderiza a lista para refletir a remoção
+            renderAtivos();
+        }
+    });
 
     // Event listener para o envio do formulário de adição de ativo
     addAssetForm.addEventListener('submit', async function (event) {
