@@ -8,11 +8,14 @@ export const initCarteira = () => {
 
     // "Banco de dados" da carteira
     let carteira = [];
+    // Variável para acumular o resultado de todas as vendas
+    let lucroPrejuizoRealizado = 0;
     // Lista de "ouvintes" que serão notificados quando a carteira for atualizada
     const portfolioUpdateListeners = [];
 
     // Expõe funções para outros módulos poderem interagir com os dados da carteira
     window.getCarteira = () => carteira;
+    window.getLucroPrejuizo = () => lucroPrejuizoRealizado;
     window.addPortfolioUpdateListener = (listener) => {
         portfolioUpdateListeners.push(listener);
     };
@@ -130,6 +133,10 @@ export const initCarteira = () => {
 
             // Mantém o preço médio original antes de qualquer alteração
             const precoMedio = posicaoExistente.custoTotal / posicaoExistente.quantidade;
+
+            // Calcula o lucro/prejuízo desta operação de venda
+            const resultadoDaVenda = (preco - precoMedio) * quantidade;
+            lucroPrejuizoRealizado += resultadoDaVenda;
 
             // Diminui a quantidade
             posicaoExistente.quantidade -= quantidade;
