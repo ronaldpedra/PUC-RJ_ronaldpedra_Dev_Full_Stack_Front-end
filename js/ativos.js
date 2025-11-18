@@ -1,6 +1,9 @@
 // Exporta a função principal que encapsula toda a lógica deste módulo
 export function initAtivos() {
 
+    // Função para permitir que outros módulos acessem a lista de ativos
+    window.getAtivos = () => ativos;
+
     // Nosso "banco de dados" local. Em um projeto real, isso poderia ser gerenciado com mais robustez.
     let ativos = [
         { ticker: 'PETR4', nome: 'Petrobras', classe: 'Ação', valor: 38.50 },
@@ -81,7 +84,6 @@ export function initAtivos() {
                     <button class="btn btn-sm btn-outline-primary border-0 ms-2 edit-btn" data-ticker="${ativo.ticker}" title="Editar ${ativo.ticker}">
                         <i class="bi bi-pencil-square"></i>
                     </button>
-                </div>
             `;
             listGroup.appendChild(listItem);
         });

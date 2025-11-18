@@ -59,11 +59,14 @@
             <!-- Coluna da Carteira -->
             <div class="col-lg-4 mb-4">
                 <div class="card h-100">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h3>Carteira</h3>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal"
+                            data-bs-target="#portfolioTransactionModal">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
                     </div>
                     <div class="card-body" id="carteira-content">
-                        <p>Visualização detalhada da composição da sua carteira atual.</p>
                         <!-- Gráficos e detalhes da carteira virão aqui -->
                     </div>
                 </div>
@@ -121,6 +124,55 @@
                     <button type="button" class="btn btn-danger me-auto d-none" id="delete-asset-btn">Excluir</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary" form="add-asset-form">Salvar Ativo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Registrar Operação na Carteira -->
+    <div class="modal fade" id="portfolioTransactionModal" tabindex="-1"
+        aria-labelledby="portfolioTransactionModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="portfolioTransactionModalLabel">Registrar Operação</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="portfolio-transaction-form">
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Operação</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="portfolioTransactionType"
+                                    id="buy-radio" value="compra" checked>
+                                <label class="form-check-label" for="buy-radio">Compra</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="portfolioTransactionType"
+                                    id="sell-radio" value="venda">
+                                <label class="form-check-label" for="sell-radio">Venda</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-asset-select" class="form-label">Ativo</label>
+                            <select class="form-select" id="portfolio-asset-select" required>
+                                <!-- Opções de ativos serão preenchidas dinamicamente -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-quantity-input" class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="portfolio-quantity-input" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-price-input" class="form-label">Preço Médio (R$)</label>
+                            <input type="number" class="form-control" id="portfolio-price-input" step="0.01" min="0.01"
+                                required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" form="portfolio-transaction-form">Registrar</button>
                 </div>
             </div>
         </div>
