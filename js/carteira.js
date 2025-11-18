@@ -8,6 +8,14 @@ export const initCarteira = () => {
 
     // "Banco de dados" da carteira
     let carteira = [];
+    // Lista de "ouvintes" que serão notificados quando a carteira for atualizada
+    const portfolioUpdateListeners = [];
+
+    // Expõe funções para outros módulos poderem interagir com os dados da carteira
+    window.getCarteira = () => carteira;
+    window.addPortfolioUpdateListener = (listener) => {
+        portfolioUpdateListeners.push(listener);
+    };
 
     /**
      * Renderiza a seção da carteira.
@@ -138,6 +146,9 @@ export const initCarteira = () => {
         transactionForm.reset(); // Limpa o formulário para a próxima operação
         renderCarteira(); // Atualiza a exibição da carteira
         transactionModal.hide(); // Fecha o modal
+
+        // Notifica todos os "ouvintes" que a carteira foi atualizada
+        portfolioUpdateListeners.forEach(listener => listener());
     };
 
     // Adiciona um listener para popular o seletor toda vez que o modal for aberto
