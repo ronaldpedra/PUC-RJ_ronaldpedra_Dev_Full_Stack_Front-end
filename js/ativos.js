@@ -39,10 +39,18 @@ export function initAtivos() {
                     ticker: ativoFromApi.ticker,
                     nome: ativoFromApi.nome,
                     classe: ativoFromApi.classe_b3, // Mapeia 'classe_b3' para 'classe'
-                    valor: null // Inicializa 'valor' como nulo, pois não vem da lista inicial
+                    logoUrl: null, // Inicializa 'logoUrl' como nulo
+                    valor: null, // Inicializa 'valor' como nulo, pois não vem da lista inicial
+                    changePercent: null // Inicializa a variação percentual
                 };
             });
-            renderAtivos(); // Renderiza os ativos na tela
+
+            // Renderiza uma primeira vez para o usuário ver a lista rapidamente
+            renderAtivos();
+
+            // Agora, busca os valores atualizados para cada ativo em segundo plano
+            await updateAllAssetValues();
+
         } catch (error) {
             console.error('Falha ao carregar ativos do back-end:', error);
             ativosContent.innerHTML = `<p class="text-center text-danger mt-3">Falha ao carregar os ativos. Verifique a conexão com o servidor e tente novamente.</p>`;
@@ -50,26 +58,58 @@ export function initAtivos() {
     }
 
     /**
-     * Função para simular a busca de dados de um ativo em uma API externa.
-     * Retorna uma Promise que resolve com os dados ou rejeita (simulando um erro).
+     * Itera sobre todos os ativos e busca seus valores de mercado atualizados.
      */
-    function fetchAtivoData(ticker) {
-        console.log(`Buscando dados para ${ticker}...`);
-        // Simulação: A API falha para tickers com menos de 5 caracteres
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                if (ticker.length >= 5) {
-                    // Simulação de sucesso
-                    resolve({
-                        nome: `Nome do Ativo ${ticker}`,
-                        valor: Math.random() * 100 // Valor aleatório
-                    });
-                } else {
-                    // Simulação de falha
-                    reject('API indisponível ou ticker inválido.');
-                }
-            }, 500); // Simula a latência da rede
+    async function updateAllAssetValues() {
+        // Cria um array de Promises, uma para cada requisição de atualização de ativo
+        const updatePromises = ativos.map(async (ativo) => {
+            try {
+                const data = await fetchAtivoData(ativo.ticker);
+                ativo.nome = data.nome; // Atualiza o nome (pode ter vindo mais completo da API)
+                ativo.valor = data.valor;
+                ativo.logoUrl = data.logoUrl; // Atualiza a URL do logo
+                ativo.changePercent = data.changePercent; // Atualiza a variação percentual
+            } catch (error) {
+                console.warn(`Não foi possível buscar dados para ${ativo.ticker}: ${error}`);
+                // O valor e nome do ativo permanecerão como estavam
+            }
         });
+
+        // Espera todas as buscas terminarem
+        await Promise.all(updatePromises);
+
+        // Re-renderiza a lista com os valores atualizados
+        renderAtivos();
+    }
+
+    /**
+     * Busca os dados de um ativo específico (nome e valor) na API da Brapi.
+     * @param {string} ticker O código do ativo a ser buscado.
+     * @returns {Promise<object>} Uma promise que resolve com { nome, valor }.
+     */
+    async function fetchAtivoData(ticker) {
+        const token = window.APP_CONFIG.BRAPI_TOKEN;
+        const url = `https://brapi.dev/api/quote/${ticker}?token=${token}`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Falha na requisição para a API Brapi: ${response.statusText}`);
+
+        const data = await response.json();
+        const result = data.results && data.results[0];
+
+        if (!result || data.error) throw new Error(data.error || `Ticker "${ticker}" não encontrado.`);
+
+        // Sanitiza os nomes para remover espaços extras no início, fim e entre as palavras.
+        const longName = result.longName ? result.longName.trim().replace(/\s+/g, ' ') : null;
+        const shortName = result.shortName ? result.shortName.trim().replace(/\s+/g, ' ') : null;
+
+        return {
+            // Usa o nome longo se disponível, senão o nome curto, senão um texto padrão.
+            nome: longName || shortName || `Nome não disponível`,
+            valor: result.regularMarketPrice,
+            logoUrl: result.logourl,
+            changePercent: result.regularMarketChangePercent
+        };
     }
 
     /**
@@ -96,20 +136,46 @@ export function initAtivos() {
             listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
 
             // Constrói o HTML para cada item da lista
+            // Define a URL do logo. Usa um logo genérico se a URL não estiver disponível ou for o logo padrão da Brapi.
+            const logoUrl = (ativo.logoUrl && ativo.logoUrl !== "https://icons.brapi.dev/icons/BRAPI.svg")
+                ? ativo.logoUrl
+                : './img/logoTickerGenerico.png';
             const nomeAtivo = ativo.nome ? ` - ${ativo.nome}` : ' - (Nome indisponível)';
-            const valorAtivo = ativo.valor ? `R$ ${ativo.valor.toFixed(2)}` : '(Valor indisponível)';
-            const badgeColor = ativo.valor ? 'bg-primary' : 'bg-secondary';
+
+            // Prepara a exibição do valor e da variação
+            let valorEVariacaoHTML = `<span class="badge bg-secondary rounded-pill">(Valor indisponível)</span>`;
+            if (typeof ativo.valor === 'number') {
+                const valorFormatado = `R$ ${ativo.valor.toFixed(2)}`;
+                let variacaoHTML = '';
+
+                if (typeof ativo.changePercent === 'number') {
+                    const variacao = ativo.changePercent;
+                    const corVariacao = variacao >= 0 ? 'text-success' : 'text-danger';
+                    const iconeVariacao = variacao >= 0 ? 'bi-arrow-up-right' : 'bi-arrow-down-right';
+                    variacaoHTML = `<small class="${corVariacao} ms-2"><i class="bi ${iconeVariacao}"></i> ${variacao.toFixed(2)}%</small>`;
+                }
+
+                valorEVariacaoHTML = `<span class="badge bg-primary rounded-pill">${valorFormatado}</span>${variacaoHTML}`;
+            }
 
             listItem.innerHTML = `
-                <div class="me-auto">
-                    <span class="fw-bold">${ativo.ticker}</span>
-                    <small class="text-muted">${nomeAtivo}</small>
+                <!-- Coluna Esquerda: Logo, Ticker e Nome -->
+                <div class="d-flex align-items-center me-3" style="min-width: 0;">
+                    <img src="${logoUrl}" alt="Logo de ${ativo.ticker}" class="me-3 flex-shrink-0" style="width: 32px; height: 32px; border-radius: 50%;">
+                    <div class="flex-grow-1 text-truncate">
+                        <div class="fw-bold">${ativo.ticker}</div>
+                        <small class="text-muted">${ativo.nome || 'Nome indisponível'}</small>
+                    </div>
                 </div>
-                <div class="d-flex align-items-center">
-                    <span class="badge ${badgeColor} rounded-pill">${valorAtivo}</span>
-                    <button class="btn btn-sm btn-outline-primary border-0 ms-2 edit-btn" data-ticker="${ativo.ticker}" title="Editar ${ativo.ticker}">
+                <!-- Coluna Direita: Preço, Variação e Botão -->
+                <div class="d-flex align-items-center flex-shrink-0">
+                    <div class="text-end me-2">
+                        ${valorEVariacaoHTML}
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary border-0 edit-btn" data-ticker="${ativo.ticker}" title="Editar ${ativo.ticker}">
                         <i class="bi bi-pencil-square"></i>
                     </button>
+                </div>
             `;
             listGroup.appendChild(listItem);
         });
@@ -178,13 +244,17 @@ export function initAtivos() {
                 ticker: tickerInput.value.toUpperCase(),
                 classe: classSelect.value,
                 nome: null,
-                valor: null
+                logoUrl: null,
+                valor: null,
+                changePercent: null
             };
 
             try {
                 const data = await fetchAtivoData(novoAtivo.ticker);
                 novoAtivo.nome = data.nome;
                 novoAtivo.valor = data.valor;
+                novoAtivo.logoUrl = data.logoUrl;
+                novoAtivo.changePercent = data.changePercent;
             } catch (error) {
                 console.warn(error);
             } finally {
