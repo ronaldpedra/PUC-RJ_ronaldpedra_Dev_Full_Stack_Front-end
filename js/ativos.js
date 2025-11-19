@@ -4,12 +4,8 @@ export function initAtivos() {
     // Função para permitir que outros módulos acessem a lista de ativos
     window.getAtivos = () => ativos;
 
-    // Nosso "banco de dados" local. Em um projeto real, isso poderia ser gerenciado com mais robustez.
-    let ativos = [
-        { ticker: 'PETR4', nome: 'Petrobras', classe: 'Ação', valor: 38.50 },
-        { ticker: 'VALE3', nome: 'Vale', classe: 'Ação', valor: 62.75 },
-        { ticker: 'MXRF11', nome: 'Maxi Renda FII', classe: 'FII', valor: 10.50 }
-    ];
+    // Nosso "banco de dados" local.
+    let ativos = [];
 
     // Seleciona os elementos do DOM com os quais vamos interagir
     const ativosContent = document.getElementById('ativos-content');
@@ -20,8 +16,38 @@ export function initAtivos() {
     const modalSubmitBtn = addAssetModalEl.querySelector('button[type="submit"]');
     const deleteAssetBtn = document.getElementById('delete-asset-btn');
 
-    // State variable to track if we are editing an asset
+    // Variável de estado para rastrear se estamos editando um ativo
     let currentEditTicker = null;
+
+    /**
+     * Busca a lista inicial de ativos do back-end.
+     */
+    async function loadInitialAtivos() {
+        // Exibe um indicador de carregamento para o usuário
+        ativosContent.innerHTML = `<p class="text-center text-muted mt-3">Carregando ativos...</p>`;
+        try {
+            // Usa a URL base do arquivo de configuração e adiciona o endpoint específico.
+            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos`);
+            if (!response.ok) {
+                throw new Error(`Erro na rede: ${response.statusText}`);
+            }
+            const data = await response.json();
+            // Transforma os dados recebidos da API para o formato que o front-end espera.
+            // A API retorna um objeto { ativos: [...] } e usa 'classe_b3'.
+            ativos = data.ativos.map(ativoFromApi => {
+                return {
+                    ticker: ativoFromApi.ticker,
+                    nome: ativoFromApi.nome,
+                    classe: ativoFromApi.classe_b3, // Mapeia 'classe_b3' para 'classe'
+                    valor: null // Inicializa 'valor' como nulo, pois não vem da lista inicial
+                };
+            });
+            renderAtivos(); // Renderiza os ativos na tela
+        } catch (error) {
+            console.error('Falha ao carregar ativos do back-end:', error);
+            ativosContent.innerHTML = `<p class="text-center text-danger mt-3">Falha ao carregar os ativos. Verifique a conexão com o servidor e tente novamente.</p>`;
+        }
+    }
 
     /**
      * Função para simular a busca de dados de um ativo em uma API externa.
@@ -99,7 +125,7 @@ export function initAtivos() {
             const tickerParaEditar = editButton.dataset.ticker;
             const ativo = ativos.find(a => a.ticker === tickerParaEditar);
             if (ativo) {
-                currentEditTicker = ativo.ticker; // Set state to "editing"
+                currentEditTicker = ativo.ticker; // Define o estado como "editando"
 
                 // Configura o modal para o modo de edição
                 modalTitle.textContent = 'Editar Ativo';
@@ -107,7 +133,6 @@ export function initAtivos() {
 
                 const tickerInput = document.getElementById('ticker-input');
                 tickerInput.value = ativo.ticker;
-                // tickerInput.readOnly = false; // Permite a edição do ticker
 
                 document.getElementById('class-select').value = ativo.classe;
 
@@ -124,7 +149,7 @@ export function initAtivos() {
         const classSelect = document.getElementById('class-select');
 
         if (currentEditTicker) {
-            // --- UPDATE LOGIC ---
+            // --- LÓGICA DE ATUALIZAÇÃO ---
             const newTicker = tickerInput.value.toUpperCase();
 
             // Validação: Verifica se o novo ticker já existe em OUTRO ativo.
@@ -143,7 +168,7 @@ export function initAtivos() {
                 assetToUpdate.classe = classSelect.value;
             }
         } else {
-            // --- CREATE LOGIC (existing logic) ---
+            // --- LÓGICA DE CRIAÇÃO ---
             const newTicker = tickerInput.value.toUpperCase();
             if (ativos.some(ativo => ativo.ticker === newTicker)) {
                 alert(`O ticker "${newTicker}" já está cadastrado.`);
@@ -186,20 +211,19 @@ export function initAtivos() {
     });
 
 
-    // Reset modal to "add" state when it's closed
+    // Reinicia o modal para o estado de "adição" quando ele é fechado
     addAssetModalEl.addEventListener('hidden.bs.modal', function () {
-        currentEditTicker = null; // Reset state
+        currentEditTicker = null; // Reinicia o estado
         addAssetForm.reset();
 
         modalTitle.textContent = 'Adicionar Novo Ativo';
         modalSubmitBtn.textContent = 'Salvar Ativo';
 
         const tickerInput = document.getElementById('ticker-input');
-        tickerInput.readOnly = false;
 
         deleteAssetBtn.classList.add('d-none'); // Garante que o botão de excluir esteja oculto
     });
 
-    // Renderiza a lista inicial de ativos quando a página carrega
-    renderAtivos();
+    // Carrega os dados iniciais do back-end ao invés de renderizar a lista estática
+    loadInitialAtivos();
 }

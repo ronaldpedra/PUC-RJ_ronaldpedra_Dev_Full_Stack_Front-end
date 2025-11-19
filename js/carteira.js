@@ -6,7 +6,7 @@ export const initCarteira = () => {
     const assetSelect = document.getElementById('portfolio-asset-select');
     const transactionForm = document.getElementById('portfolio-transaction-form');
 
-    // "Banco de dados" da carteira
+    // "Banco de dados" local da carteira
     let carteira = [];
     // Variável para acumular o resultado de todas as vendas
     let lucroPrejuizoRealizado = 0;
@@ -28,7 +28,7 @@ export const initCarteira = () => {
         // Limpa o conteúdo atual
         carteiraContent.innerHTML = '';
 
-        if (carteira.length === 0) {
+        if (carteira.length === 0) { // Se a carteira estiver vazia
             carteiraContent.innerHTML = '<p class="text-center">Nenhum ativo na carteira.</p>';
             return; // Encerra a função aqui se a carteira estiver vazia
         }
