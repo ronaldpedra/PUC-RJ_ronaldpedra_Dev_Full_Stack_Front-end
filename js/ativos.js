@@ -9,6 +9,7 @@ export function initAtivos() {
 
     // Seleciona os elementos do DOM com os quais vamos interagir
     const ativosContent = document.getElementById('ativos-content');
+    const alertContainer = document.getElementById('alert-container');
     const addAssetForm = document.getElementById('add-asset-form');
     const addAssetModalEl = document.getElementById('addAssetModal');
     const addAssetModal = new bootstrap.Modal(addAssetModalEl);
@@ -18,6 +19,31 @@ export function initAtivos() {
 
     // Variável de estado para rastrear se estamos editando um ativo
     let currentEditTicker = null;
+
+    /**
+     * Exibe um alerta dinâmico do Bootstrap no topo da página.
+     * @param {string} message A mensagem a ser exibida.
+     * @param {string} type O tipo de alerta do Bootstrap (e.g., 'success', 'danger', 'warning').
+     */
+    function showAlert(message, type = 'info') {
+        if (!alertContainer) {
+            console.error('Elemento #alert-container não encontrado no DOM. Usando alert nativo como fallback.');
+            alert(message);
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        alertContainer.append(wrapper);
+
+        // Remove o alerta automaticamente após 5 segundos
+        setTimeout(() => wrapper.remove(), 5000);
+    }
 
     /**
      * Busca a lista inicial de ativos do back-end.
@@ -217,33 +243,104 @@ export function initAtivos() {
         modalSubmitBtn.disabled = true; // Desabilita o botão para evitar cliques duplos
 
         if (currentEditTicker) {
-            // --- LÓGICA DE ATUALIZAÇÃO ---
+            // --- LÓGICA DE ATUALIZAÇÃO (EDIÇÃO) ---
             const newTicker = tickerInput.value.toUpperCase();
+            const newClass = classSelect.value;
 
-            // Validação: Verifica se o novo ticker já existe em OUTRO ativo.
-            const tickerExists = ativos.some(
-                (ativo) => ativo.ticker === newTicker && ativo.ticker !== currentEditTicker
-            );
+            try {
+                // Validação: Verifica se o novo ticker já existe em OUTRO ativo.
+                const tickerExists = ativos.some(
+                    (ativo) => ativo.ticker === newTicker && ativo.ticker !== currentEditTicker
+                );
 
-            if (tickerExists) {
-                alert(`O ticker "${newTicker}" já está cadastrado. Por favor, insira um ticker diferente.`);
-                return; // Interrompe a execução se o ticker já existir
+                if (tickerExists) {
+                    // Usamos throw para centralizar o tratamento de erros no bloco catch.
+                    throw new Error(`O ticker "${newTicker}" já está cadastrado.`);
+                }
+
+                let dadosExternos;
+                try {
+                    // 1. Tenta buscar dados da API externa para validar o ticker e obter dados de mercado.
+                    dadosExternos = await fetchAtivoData(newTicker);
+                } catch (apiError) {
+                    console.warn('Falha ao buscar dados na API externa durante a atualização:', apiError.message);
+                    if (window.APP_CONFIG.MANTER_INTEGRIDADE_DADOS) {
+                        // 2a. Se a integridade está ATIVA, a operação falha.
+                        throw new Error(`O ticker "${newTicker}" não foi encontrado ou a API externa falhou. A verificação de integridade está ativa.`);
+                    } else {
+                        // 2b. Se a integridade está DESATIVADA, continua com dados de mercado vazios.
+                        console.log('Verificação de integridade desativada. Prosseguindo com a atualização local.');
+                        dadosExternos = { longName: null, shortName: null, logoUrl: null, valor: null, changePercent: null };
+                    }
+                }
+
+                // 3. Prepara os dados para enviar ao back-end (apenas os que têm valor).
+                const formData = new FormData();
+                formData.append('ticker', newTicker);
+                formData.append('classe_b3', newClass);
+                if (dadosExternos.longName) {
+                    formData.append('long_name', dadosExternos.longName);
+                }
+                if (dadosExternos.shortName) {
+                    formData.append('short_name', dadosExternos.shortName);
+                }
+                
+                let ativoAtualizado;
+                try {
+                    // 4. TENTA enviar a requisição PATCH para o back-end.
+                    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos?ticker=${currentEditTicker}`, {
+                        method: 'PATCH',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Falha ao atualizar o ativo no servidor.');
+                    }
+                    ativoAtualizado = await response.json();
+
+                } catch (backendError) {
+                    // 5. Se o back-end falhar, avisa no console e cria um objeto local para a UI.
+                    console.warn(`Falha ao comunicar com o back-end na atualização: ${backendError.message}. O ativo será atualizado apenas localmente.`);
+                    ativoAtualizado = {
+                        ticker: newTicker,
+                        // Se a API externa retornou nomes, usa-os. Senão, mantém os nomes indefinidos para não apagar o que já existe.
+                        long_name: dadosExternos.longName,
+                        short_name: dadosExternos.shortName,
+                        classe_b3: newClass
+                    };
+                }
+
+                // 6. Encontra o ativo na lista local para atualizá-lo com os dados (do back-end ou locais).
+                const assetToUpdate = ativos.find(a => a.ticker === currentEditTicker);
+                if (assetToUpdate) {
+                    assetToUpdate.ticker = ativoAtualizado.ticker;
+                    // Atualiza o nome apenas se um novo nome foi fornecido. Senão, mantém o antigo.
+                    assetToUpdate.nome = ativoAtualizado.long_name || ativoAtualizado.short_name || assetToUpdate.nome;
+                    assetToUpdate.classe = ativoAtualizado.classe_b3;
+                    // Atualiza também os dados de mercado
+                    assetToUpdate.logoUrl = dadosExternos.logoUrl;
+                    assetToUpdate.valor = dadosExternos.valor;
+                    assetToUpdate.changePercent = dadosExternos.changePercent;
+                }
+
+                // Re-renderiza a lista e fecha o modal
+                renderAtivos();
+                showAlert(`Ativo "${currentEditTicker}" atualizado com sucesso para "${newTicker}".`, 'success');
+                addAssetModal.hide();
+
+            } catch (error) {
+                console.error('Erro ao atualizar ativo:', error);
+                // Exibe uma mensagem de erro mais genérica para o usuário.
+                // O erro específico já foi logado no console.
+                showAlert(`Não foi possível atualizar o ativo. Motivo: ${error.message}`, 'danger');
             }
-
-            const assetToUpdate = ativos.find(a => a.ticker === currentEditTicker);
-            if (assetToUpdate) {
-                assetToUpdate.ticker = newTicker;
-                assetToUpdate.classe = classSelect.value;
-            }
-            // A lógica de atualização do back-end será implementada depois.
-            renderAtivos();
-            addAssetModal.hide();
 
         } else {
             // --- LÓGICA DE CRIAÇÃO ---
             const newTicker = tickerInput.value.toUpperCase();
             if (ativos.some(ativo => ativo.ticker === newTicker)) {
-                alert(`O ticker "${newTicker}" já está cadastrado.`);
+                showAlert(`O ticker "${newTicker}" já está cadastrado.`, 'warning');
                 modalSubmitBtn.disabled = false; // Reabilita o botão
                 return;
             }
@@ -311,11 +408,12 @@ export function initAtivos() {
                 };
                 ativos.push(novoAtivoParaLista);
                 renderAtivos();
+                showAlert(`Ativo "${novoAtivoParaLista.ticker}" adicionado com sucesso!`, 'success');
                 addAssetModal.hide();
 
             } catch (error) {
                 console.error('Erro ao adicionar novo ativo:', error);
-                alert(`Não foi possível adicionar o ativo. Verifique se o ticker "${newTicker}" é válido e tente novamente.`);
+                showAlert(`Não foi possível adicionar o ativo. Verifique se o ticker "${newTicker}" é válido e tente novamente.`, 'danger');
             }
         }
         
@@ -340,10 +438,11 @@ export function initAtivos() {
                 // Apenas se a exclusão no back-end for bem-sucedida, atualiza o front-end
                 ativos = ativos.filter(ativo => ativo.ticker !== currentEditTicker);
                 renderAtivos();
+                showAlert(`Ativo "${currentEditTicker}" excluído com sucesso.`, 'success');
                 addAssetModal.hide(); // Fecha o modal após a exclusão
             } catch (error) {
                 console.error('Erro ao excluir ativo:', error);
-                alert('Não foi possível excluir o ativo. Tente novamente.');
+                showAlert('Não foi possível excluir o ativo. Tente novamente.', 'danger');
             }
         }
     });
