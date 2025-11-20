@@ -85,7 +85,7 @@ export function initAtivos() {
     /**
      * Busca os dados de um ativo específico (nome e valor) na API da Brapi.
      * @param {string} ticker O código do ativo a ser buscado.
-     * @returns {Promise<object>} Uma promise que resolve com { nome, valor }.
+     * @returns {Promise<object>} Uma promise que resolve com os dados detalhados do ativo.
      */
     async function fetchAtivoData(ticker) {
         const token = window.APP_CONFIG.BRAPI_TOKEN;
@@ -104,8 +104,9 @@ export function initAtivos() {
         const shortName = result.shortName ? result.shortName.trim().replace(/\s+/g, ' ') : null;
 
         return {
-            // Usa o nome longo se disponível, senão o nome curto, senão um texto padrão.
-            nome: longName || shortName || `Nome não disponível`,
+            // Retorna ambos os nomes para que o chamador decida qual usar.
+            longName: longName,
+            shortName: shortName,
             valor: result.regularMarketPrice,
             logoUrl: result.logourl,
             changePercent: result.regularMarketChangePercent
@@ -213,6 +214,7 @@ export function initAtivos() {
         event.preventDefault(); // Previne o recarregamento da página
         const tickerInput = document.getElementById('ticker-input');
         const classSelect = document.getElementById('class-select');
+        modalSubmitBtn.disabled = true; // Desabilita o botão para evitar cliques duplos
 
         if (currentEditTicker) {
             // --- LÓGICA DE ATUALIZAÇÃO ---
@@ -233,37 +235,66 @@ export function initAtivos() {
                 assetToUpdate.ticker = newTicker;
                 assetToUpdate.classe = classSelect.value;
             }
+            // A lógica de atualização do back-end será implementada depois.
+            renderAtivos();
+            addAssetModal.hide();
+
         } else {
             // --- LÓGICA DE CRIAÇÃO ---
             const newTicker = tickerInput.value.toUpperCase();
             if (ativos.some(ativo => ativo.ticker === newTicker)) {
                 alert(`O ticker "${newTicker}" já está cadastrado.`);
+                modalSubmitBtn.disabled = false; // Reabilita o botão
                 return;
             }
-            const novoAtivo = {
-                ticker: tickerInput.value.toUpperCase(),
-                classe: classSelect.value,
-                nome: null,
-                logoUrl: null,
-                valor: null,
-                changePercent: null
-            };
 
             try {
-                const data = await fetchAtivoData(novoAtivo.ticker);
-                novoAtivo.nome = data.nome;
-                novoAtivo.valor = data.valor;
-                novoAtivo.logoUrl = data.logoUrl;
-                novoAtivo.changePercent = data.changePercent;
+                // 1. Valida e busca dados na API externa primeiro
+                const dadosExternos = await fetchAtivoData(newTicker);
+                
+                // 2. Cria um objeto FormData e anexa os dados
+                const formData = new FormData();
+                formData.append('ticker', newTicker);
+                formData.append('long_name', dadosExternos.longName || ''); // Envia string vazia se for nulo
+                formData.append('short_name', dadosExternos.shortName || ''); // Envia string vazia se for nulo
+                formData.append('classe_b3', classSelect.value); // Agora o valor já vem correto do HTML
+
+                // 3. Envia para o nosso back-end usando a rota correta e o método POST com FormData
+                const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/adicionar_ativo`, {
+                    method: 'POST',
+                    body: formData 
+                    // Ao usar FormData, não definimos o header 'Content-Type'. 
+                    // O navegador o define como 'multipart/form-data' com o boundary correto.
+                });
+
+                if (!response.ok) {
+                    // Se o back-end retornar um erro, lança uma exceção para ser capturada pelo catch
+                    throw new Error('Falha ao salvar o ativo no servidor.');
+                }
+
+                const ativoCriado = await response.json(); // O back-end deve retornar o ativo criado
+
+                // 4. Adiciona o novo ativo na lista local (front-end) com todos os dados
+                const novoAtivoParaLista = {
+                    ticker: ativoCriado.ticker,
+                    nome: ativoCriado.long_name || ativoCriado.short_name, // Usa o nome que veio do back-end
+                    classe: ativoCriado.classe_b3,
+                    // Adiciona os dados da Brapi que não são salvos no nosso DB, para exibição imediata
+                    logoUrl: dadosExternos.logoUrl,
+                    valor: dadosExternos.valor,
+                    changePercent: dadosExternos.changePercent
+                };
+                ativos.push(novoAtivoParaLista);
+                renderAtivos();
+                addAssetModal.hide();
+
             } catch (error) {
-                console.warn(error);
-            } finally {
-                ativos.push(novoAtivo);
+                console.error('Erro ao adicionar novo ativo:', error);
+                alert(`Não foi possível adicionar o ativo. Verifique se o ticker "${newTicker}" é válido e tente novamente.`);
             }
         }
-
-        renderAtivos();
-        addAssetModal.hide();
+        
+        modalSubmitBtn.disabled = false; // Reabilita o botão ao final da operação
     });
 
     // Event listener para o botão de excluir DENTRO do modal
@@ -288,6 +319,7 @@ export function initAtivos() {
 
         modalTitle.textContent = 'Adicionar Novo Ativo';
         modalSubmitBtn.textContent = 'Salvar Ativo';
+        modalSubmitBtn.disabled = false; // Garante que o botão esteja habilitado
 
         const tickerInput = document.getElementById('ticker-input');
 
