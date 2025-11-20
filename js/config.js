@@ -6,5 +6,6 @@
 
 window.APP_CONFIG = {
     API_BASE_URL: 'http://127.0.0.1:5000',
-    BRAPI_TOKEN: 'gfUi1V9jZ9MmxniKbqvscm'
+    BRAPI_TOKEN: 'gfUi1V9jZ9MmxniKbqvscm',
+    MANTER_INTEGRIDADE_DADOS: true // true = valida na API externa; false = não valida.
 };

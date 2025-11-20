@@ -37,7 +37,7 @@ export function initAtivos() {
             ativos = data.ativos.map(ativoFromApi => {
                 return {
                     ticker: ativoFromApi.ticker,
-                    nome: ativoFromApi.nome,
+                    nome: ativoFromApi.long_name || ativoFromApi.short_name, // Usa o nome longo ou o curto
                     classe: ativoFromApi.classe_b3, // Mapeia 'classe_b3' para 'classe'
                     logoUrl: null, // Inicializa 'logoUrl' como nulo
                     valor: null, // Inicializa 'valor' como nulo, pois não vem da lista inicial
@@ -65,7 +65,7 @@ export function initAtivos() {
         const updatePromises = ativos.map(async (ativo) => {
             try {
                 const data = await fetchAtivoData(ativo.ticker);
-                ativo.nome = data.nome; // Atualiza o nome (pode ter vindo mais completo da API)
+                ativo.nome = data.longName || data.shortName; // Atualiza o nome com os dados da Brapi
                 ativo.valor = data.valor;
                 ativo.logoUrl = data.logoUrl; // Atualiza a URL do logo
                 ativo.changePercent = data.changePercent; // Atualiza a variação percentual
@@ -249,37 +249,62 @@ export function initAtivos() {
             }
 
             try {
-                // 1. Valida e busca dados na API externa primeiro
-                const dadosExternos = await fetchAtivoData(newTicker);
+                let dadosExternos;
+
+                try {
+                    // 1. SEMPRE tenta buscar os dados na API externa primeiro.
+                    dadosExternos = await fetchAtivoData(newTicker);
+                } catch (apiError) {
+                    // 2. Se a busca falhar, AQUI verificamos a configuração de integridade.
+                    console.warn('Falha ao buscar dados na API externa:', apiError.message);
+
+                    if (window.APP_CONFIG.MANTER_INTEGRIDADE_DADOS) {
+                        // 3a. Se a integridade está ATIVADA, a operação deve falhar. Lançamos o erro.
+                        throw new Error(`O ticker "${newTicker}" não foi encontrado ou a API externa falhou. A verificação de integridade está ativa.`);
+                    } else {
+                        // 3b. Se a integridade está DESATIVADA, a operação continua com dados mínimos.
+                        console.log('Verificação de integridade desativada. Prosseguindo com o cadastro local.');
+                        dadosExternos = { longName: newTicker, shortName: newTicker, logoUrl: null, valor: null, changePercent: null };
+                    }
+                }
                 
-                // 2. Cria um objeto FormData e anexa os dados
+                // 4. Cria um objeto FormData e anexa os dados (sejam eles completos ou mínimos)
                 const formData = new FormData();
                 formData.append('ticker', newTicker);
                 formData.append('long_name', dadosExternos.longName || ''); // Envia string vazia se for nulo
                 formData.append('short_name', dadosExternos.shortName || ''); // Envia string vazia se for nulo
                 formData.append('classe_b3', classSelect.value); // Agora o valor já vem correto do HTML
 
-                // 3. Envia para o nosso back-end usando a rota correta e o método POST com FormData
-                const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/adicionar_ativo`, {
-                    method: 'POST',
-                    body: formData 
-                    // Ao usar FormData, não definimos o header 'Content-Type'. 
-                    // O navegador o define como 'multipart/form-data' com o boundary correto.
-                });
+                let ativoCriado;
 
-                if (!response.ok) {
-                    // Se o back-end retornar um erro, lança uma exceção para ser capturada pelo catch
-                    throw new Error('Falha ao salvar o ativo no servidor.');
+                try {
+                    // 5. TENTA enviar para o nosso back-end.
+                    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error('O servidor respondeu com um erro.');
+
+                    ativoCriado = await response.json();
+
+                } catch (backendError) {
+                    // 6. Se o back-end falhar, exibe um aviso, mas NÃO interrompe a operação.
+                    console.warn(`Falha ao comunicar com o back-end: ${backendError.message}. O ativo será adicionado apenas localmente.`);
+                    // Cria um objeto 'ativoCriado' localmente para que a UI possa ser atualizada.
+                    ativoCriado = {
+                        ticker: newTicker,
+                        long_name: dadosExternos.longName,
+                        short_name: dadosExternos.shortName,
+                        classe_b3: classSelect.value
+                    };
                 }
 
-                const ativoCriado = await response.json(); // O back-end deve retornar o ativo criado
-
-                // 4. Adiciona o novo ativo na lista local (front-end) com todos os dados
+                // 7. Adiciona o novo ativo na lista local (front-end), independentemente do sucesso do back-end.
                 const novoAtivoParaLista = {
                     ticker: ativoCriado.ticker,
                     nome: ativoCriado.long_name || ativoCriado.short_name, // Usa o nome que veio do back-end
                     classe: ativoCriado.classe_b3,
-                    // Adiciona os dados da Brapi que não são salvos no nosso DB, para exibição imediata
                     logoUrl: dadosExternos.logoUrl,
                     valor: dadosExternos.valor,
                     changePercent: dadosExternos.changePercent
@@ -298,16 +323,28 @@ export function initAtivos() {
     });
 
     // Event listener para o botão de excluir DENTRO do modal
-    deleteAssetBtn.addEventListener('click', function () {
+    deleteAssetBtn.addEventListener('click', async function () {
         if (!currentEditTicker) return;
 
         // Adiciona uma confirmação para segurança
         const isConfirmed = confirm(`Tem certeza que deseja excluir o ativo ${currentEditTicker}? Esta ação não pode ser desfeita.`);
 
         if (isConfirmed) {
-            ativos = ativos.filter(ativo => ativo.ticker !== currentEditTicker);
-            renderAtivos();
-            addAssetModal.hide(); // Fecha o modal após a exclusão
+            try {
+                const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos?ticker=${currentEditTicker}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('Falha ao excluir o ativo no servidor.');
+
+                // Apenas se a exclusão no back-end for bem-sucedida, atualiza o front-end
+                ativos = ativos.filter(ativo => ativo.ticker !== currentEditTicker);
+                renderAtivos();
+                addAssetModal.hide(); // Fecha o modal após a exclusão
+            } catch (error) {
+                console.error('Erro ao excluir ativo:', error);
+                alert('Não foi possível excluir o ativo. Tente novamente.');
+            }
         }
     });
 
