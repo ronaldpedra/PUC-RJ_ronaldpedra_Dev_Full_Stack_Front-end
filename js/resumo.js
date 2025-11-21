@@ -16,7 +16,8 @@ export const initResumo = () => {
         // Limpa o conteúdo atual
         resumoContent.innerHTML = '';
 
-        if (carteira.length === 0) {
+        // Só exibe a mensagem de "vazia" se a carteira estiver vazia E não houver histórico de lucro/prejuízo
+        if (carteira.length === 0 && lucroPrejuizo === 0) {
             resumoContent.innerHTML = '<p class="text-center text-muted">A carteira está vazia.</p>';
             return;
         }
@@ -26,21 +27,21 @@ export const initResumo = () => {
 
         // 2. Prepara a estrutura para agrupar por classe
         const resumoPorClasse = {
-            'Ação': { count: 0, total: 0 },
+            'Ações': { count: 0, total: 0 },
             'FII': { count: 0, total: 0 },
             'ETF': { count: 0, total: 0 },
             'BDR': { count: 0, total: 0 }
         };
-
+        
         // 3. Processa cada posição da carteira para agrupar por classe
         carteira.forEach(posicao => {
             const ativoInfo = ativosCadastrados.find(a => a.ticker === posicao.ticker);
-            if (ativoInfo && resumoPorClasse.hasOwnProperty(ativoInfo.classe)) {
-                resumoPorClasse[ativoInfo.classe].count++;
-                resumoPorClasse[ativoInfo.classe].total += posicao.custoTotal;
+            if (ativoInfo && resumoPorClasse.hasOwnProperty(ativoInfo.classe_b3)) {
+                resumoPorClasse[ativoInfo.classe_b3].count++;
+                resumoPorClasse[ativoInfo.classe_b3].total += posicao.custoTotal;
             }
         });
-
+        
         // Define a cor do badge de Lucro/Prejuízo
         const lucroPrejuizoBadgeColor = lucroPrejuizo >= 0 ? 'bg-success' : 'bg-danger';
 
@@ -88,6 +89,6 @@ export const initResumo = () => {
 
     // Registra a função renderResumo para ser chamada sempre que a carteira for atualizada
     window.addPortfolioUpdateListener(renderResumo);
-    // Renderiza o estado inicial do resumo
-    renderResumo();
+    // Registra a função para ser chamada quando a lista de ativos for carregada/atualizada
+    window.addAssetUpdateListener(renderResumo);
 };

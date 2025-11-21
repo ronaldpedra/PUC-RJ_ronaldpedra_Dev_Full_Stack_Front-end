@@ -10,11 +10,12 @@ import { initConfiguracoes } from './configuracoes.js';
 // Aguarda o DOM carregar para garantir que todos os elementos HTML estejam disponíveis
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializa o módulo de ativos
-    initAtivos();
     // Inicializa o módulo de configurações
     initConfiguracoes();
     // Inicializa o módulo da carteira
     initCarteira();
+    // Inicializa o módulo de ativos (carrega dados do back-end)
+    initAtivos();
     // Inicializa o módulo de resumo
     initResumo();
 });

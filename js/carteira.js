@@ -25,6 +25,9 @@ export const initCarteira = () => {
      * Inicialmente, exibe uma mensagem se nenhum ativo for encontrado.
      */
     const renderCarteira = () => {
+        // Notifica os "ouvintes" PRIMEIRO para que outros componentes (como o Resumo) possam se atualizar
+        portfolioUpdateListeners.forEach(listener => listener());
+
         // Limpa o conteúdo atual
         carteiraContent.innerHTML = '';
 
@@ -64,6 +67,7 @@ export const initCarteira = () => {
         });
 
         carteiraContent.appendChild(listGroup);
+
     };
 
     /**
@@ -77,7 +81,7 @@ export const initCarteira = () => {
             assetSelect.innerHTML = '<option selected disabled value="">Nenhum ativo cadastrado</option>';
         } else {
             ativosCadastrados.forEach(ativo => {
-                const option = new Option(`${ativo.ticker} (${ativo.classe})`, ativo.ticker);
+                const option = new Option(`${ativo.ticker} (${ativo.classe_b3})`, ativo.ticker);
                 assetSelect.add(option);
             });
         }
@@ -86,7 +90,7 @@ export const initCarteira = () => {
     /**
      * Processa o formulário de transação para compra ou venda de ativos.
      */
-    const handleTransactionSubmit = (event) => {
+    const handleTransactionSubmit = async (event) => {
         event.preventDefault(); // Previne o recarregamento da página
 
         // Captura os dados do formulário
@@ -101,6 +105,13 @@ export const initCarteira = () => {
             return;
         }
 
+        // --- PREPARAÇÃO DOS DADOS PARA O BACK-END ---
+        const totalOperacao = quantidade * preco;
+        let precoMedioParaApi = 0;
+        let totalInvestidoParaApi = 0;
+        let lucroOperacaoParaApi = 0;
+        let lucroInvestimentoParaApi = 0;
+
         if (tipoOperacao === 'compra') {
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
 
@@ -108,13 +119,23 @@ export const initCarteira = () => {
                 // Se já tem o ativo, atualiza a posição
                 posicaoExistente.quantidade += quantidade;
                 posicaoExistente.custoTotal += quantidade * preco;
+                precoMedioParaApi = posicaoExistente.custoTotal / posicaoExistente.quantidade;
+                totalInvestidoParaApi = posicaoExistente.custoTotal; // O novo total investido
             } else {
                 // Se não tem, adiciona uma nova posição
+                // Busca a informação completa do ativo para incluir a classe na carteira
+                const ativoInfo = window.getAtivos().find(a => a.ticker === ticker);
+                if (!ativoInfo) { // Validação de segurança
+                    alert(`Erro: Não foi possível encontrar as informações do ativo ${ticker}. A operação foi cancelada.`);
+                    return;
+                }
                 carteira.push({
-                    ticker: ticker,
+                    ...ativoInfo, // Inclui todas as propriedades do ativo (ticker, nome, classe_b3)
                     quantidade: quantidade,
                     custoTotal: quantidade * preco,
                 });
+                precoMedioParaApi = preco;
+                totalInvestidoParaApi = quantidade * preco; // O total investido é o valor da primeira compra
             }
         } else if (tipoOperacao === 'venda') {
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
@@ -132,11 +153,13 @@ export const initCarteira = () => {
             }
 
             // Mantém o preço médio original antes de qualquer alteração
-            const precoMedio = posicaoExistente.custoTotal / posicaoExistente.quantidade;
+            const precoMedio = precoMedioParaApi = posicaoExistente.custoTotal / posicaoExistente.quantidade;
 
             // Calcula o lucro/prejuízo desta operação de venda
-            const resultadoDaVenda = (preco - precoMedio) * quantidade;
-            lucroPrejuizoRealizado += resultadoDaVenda;
+            lucroOperacaoParaApi = (preco - precoMedio) * quantidade;
+            lucroPrejuizoRealizado += lucroOperacaoParaApi;
+            // O lucro total do investimento é o acumulado global
+            lucroInvestimentoParaApi = lucroPrejuizoRealizado;
 
             // Diminui a quantidade
             posicaoExistente.quantidade -= quantidade;
@@ -147,15 +170,44 @@ export const initCarteira = () => {
             } else {
                 // Se ainda houver cotas, recalcula o custo total para manter o preço médio
                 posicaoExistente.custoTotal = posicaoExistente.quantidade * precoMedio;
+                totalInvestidoParaApi = posicaoExistente.custoTotal;
             }
+        }
+
+        // Prepara os dados para enviar ao back-end
+        const formData = new FormData();
+        formData.append('movimento', tipoOperacao === 'compra' ? 'Compra' : 'Venda');
+        formData.append('preco_medio', precoMedioParaApi);
+        formData.append('quantidade', quantidade);
+        formData.append('ticker', ticker);
+        formData.append('valor', preco); // Preço unitário da operação
+        // --- NOVOS CAMPOS PARA O BACK-END ---
+        formData.append('total_operacao', totalOperacao); // Substitui 'valor_total'
+        formData.append('total_investido', totalInvestidoParaApi);
+        formData.append('lucro_operacao', lucroOperacaoParaApi);
+        formData.append('lucro_investimento', lucroInvestimentoParaApi);
+
+        try {
+            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes`, { // A rota da API
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error('Falha ao registrar a movimentação no servidor.');
+            }
+            console.log('Movimentação registrada com sucesso no back-end.');
+        } catch (error) {
+            console.warn(`AVISO: ${error.message} A operação foi registrada apenas localmente.`);
         }
 
         transactionForm.reset(); // Limpa o formulário para a próxima operação
         renderCarteira(); // Atualiza a exibição da carteira
         transactionModal.hide(); // Fecha o modal
 
-        // Notifica todos os "ouvintes" que a carteira foi atualizada
-        portfolioUpdateListeners.forEach(listener => listener());
+        // Remove o foco do botão de submit para evitar problemas de acessibilidade com o modal oculto
+        event.submitter.blur();
+
     };
 
     // Adiciona um listener para popular o seletor toda vez que o modal for aberto

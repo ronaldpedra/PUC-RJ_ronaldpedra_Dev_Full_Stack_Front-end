@@ -1,11 +1,17 @@
 // Exporta a função principal que encapsula toda a lógica deste módulo
 export function initAtivos() {
 
-    // Função para permitir que outros módulos acessem a lista de ativos
-    window.getAtivos = () => ativos;
-
     // Nosso "banco de dados" local.
     let ativos = [];
+
+    // Lista de "ouvintes" que serão notificados quando a lista de ativos for atualizada
+    const assetUpdateListeners = [];
+
+    // Funções para permitir que outros módulos acessem a lista de ativos e se registrem para atualizações
+    window.getAtivos = () => ativos;
+    window.addAssetUpdateListener = (listener) => {
+        assetUpdateListeners.push(listener);
+    };
 
     // Seleciona os elementos do DOM com os quais vamos interagir
     const ativosContent = document.getElementById('ativos-content');
@@ -64,7 +70,7 @@ export function initAtivos() {
                 return {
                     ticker: ativoFromApi.ticker,
                     nome: ativoFromApi.long_name || ativoFromApi.short_name, // Usa o nome longo ou o curto
-                    classe: ativoFromApi.classe_b3, // Mapeia 'classe_b3' para 'classe'
+                    classe_b3: ativoFromApi.classe_b3, // Mantém o nome original da API
                     logoUrl: null, // Inicializa 'logoUrl' como nulo
                     valor: null, // Inicializa 'valor' como nulo, pois não vem da lista inicial
                     changePercent: null // Inicializa a variação percentual
@@ -76,6 +82,9 @@ export function initAtivos() {
 
             // Agora, busca os valores atualizados para cada ativo em segundo plano
             await updateAllAssetValues();
+
+            // Notifica os ouvintes que a lista inicial de ativos foi carregada
+            assetUpdateListeners.forEach(listener => listener());
 
         } catch (error) {
             console.error('Falha ao carregar ativos do back-end:', error);
@@ -106,6 +115,9 @@ export function initAtivos() {
 
         // Re-renderiza a lista com os valores atualizados
         renderAtivos();
+
+        // Notifica os ouvintes que os valores dos ativos foram atualizados
+        assetUpdateListeners.forEach(listener => listener());
     }
 
     /**
@@ -227,7 +239,7 @@ export function initAtivos() {
                 const tickerInput = document.getElementById('ticker-input');
                 tickerInput.value = ativo.ticker;
 
-                document.getElementById('class-select').value = ativo.classe;
+                document.getElementById('class-select').value = ativo.classe_b3;
 
                 deleteAssetBtn.classList.remove('d-none'); // Mostra o botão de excluir
                 addAssetModal.show();
@@ -317,7 +329,7 @@ export function initAtivos() {
                     assetToUpdate.ticker = ativoAtualizado.ticker;
                     // Atualiza o nome apenas se um novo nome foi fornecido. Senão, mantém o antigo.
                     assetToUpdate.nome = ativoAtualizado.long_name || ativoAtualizado.short_name || assetToUpdate.nome;
-                    assetToUpdate.classe = ativoAtualizado.classe_b3;
+                    assetToUpdate.classe_b3 = ativoAtualizado.classe_b3;
                     // Atualiza também os dados de mercado
                     assetToUpdate.logoUrl = dadosExternos.logoUrl;
                     assetToUpdate.valor = dadosExternos.valor;
@@ -401,7 +413,7 @@ export function initAtivos() {
                 const novoAtivoParaLista = {
                     ticker: ativoCriado.ticker,
                     nome: ativoCriado.long_name || ativoCriado.short_name, // Usa o nome que veio do back-end
-                    classe: ativoCriado.classe_b3,
+                    classe_b3: ativoCriado.classe_b3,
                     logoUrl: dadosExternos.logoUrl,
                     valor: dadosExternos.valor,
                     changePercent: dadosExternos.changePercent
