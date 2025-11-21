@@ -45,6 +45,17 @@
     font-weight: 700;
 }
 
+#alert-container {
+    position: fixed;
+    top: 20px; /* Distância do topo da janela */
+    left: 50%; /* Centraliza horizontalmente */
+    transform: translateX(-50%); /* Ajuste fino para centralização */
+    z-index: 1056; /* Garante que fique acima da maioria dos outros elementos (modais do Bootstrap costumam usar 1050-1055) */
+    width: 80%; /* Define uma largura para o container do alerta */
+    max-width: 700px; /* Largura máxima para telas grandes */
+}
+
+
 /* Media Query para telas menores (ex: celulares) */
 @media (max-width: 576px) {
     .title h1 {
