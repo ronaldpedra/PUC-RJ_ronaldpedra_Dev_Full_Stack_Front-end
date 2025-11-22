@@ -191,6 +191,8 @@
                             <select class="form-select" id="portfolio-asset-select" required>
                                 <!-- Opções de ativos serão preenchidas dinamicamente -->
                             </select>
+                            <!-- Container para informações contextuais (ex: saldo na venda) -->
+                            <div id="transaction-context-info" class="form-text mt-2"></div>
                         </div>
                         <div class="mb-3">
                             <label for="portfolio-quantity-input" class="form-label">Quantidade</label>
@@ -205,7 +207,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" form="portfolio-transaction-form">Registrar</button>
+                    <button type="submit" class="btn btn-primary" id="portfolio-submit-btn" form="portfolio-transaction-form">Registrar</button>
                 </div>
             </div>
         </div>
@@ -223,6 +225,7 @@
     <script src="js/config.js"></script>
     <script type="module" src="./js/configuracoes.js"></script>
     <script type="module" src="./js/utils.js"></script>
+    <script type="module" src="./js/apiService.js"></script>
     <script type="module" src="./js/main.js"></script>
 </body>
 

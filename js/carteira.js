@@ -1,4 +1,5 @@
 import { formatCurrency } from './utils.js';
+import * as api from './apiService.js'; // Importa nosso novo módulo de serviço
 
 export const initCarteira = () => {
     // Seleciona os elementos do DOM
@@ -7,6 +8,9 @@ export const initCarteira = () => {
     const transactionModal = new bootstrap.Modal(transactionModalEl);
     const assetSelect = document.getElementById('portfolio-asset-select');
     const transactionForm = document.getElementById('portfolio-transaction-form');
+    const modalTitle = document.getElementById('portfolioTransactionModalLabel');
+    const submitBtn = document.getElementById('portfolio-submit-btn');
+    const contextInfo = document.getElementById('transaction-context-info');
 
     // "Banco de dados" local da carteira
     let carteira = [];
@@ -23,6 +27,7 @@ export const initCarteira = () => {
     window.addPortfolioUpdateListener = (listener) => {
         portfolioUpdateListeners.push(listener);
     };
+    window.renderCarteira = () => renderCarteira(); // Expõe a função de renderização
 
     /**
      * Busca os dados mais recentes da carteira do back-end e atualiza o estado local.
@@ -30,12 +35,8 @@ export const initCarteira = () => {
      */
     const refreshHistoricoCarteira = async () => {
         try {
-            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes/carteira`);
-            if (!response.ok) {
-                throw new Error(`Erro na rede: ${response.statusText}`);
-            }
-            const data = await response.json();
-            historicoCompletoCarteira = data.carteira || []; // Atualiza o histórico completo
+            historicoCompletoCarteira = await api.fetchHistoricoCarteira();
+
             console.log('Histórico da carteira atualizado:', historicoCompletoCarteira);
 
             // Recalcula o lucro/prejuízo total com base nos novos dados
@@ -75,13 +76,16 @@ export const initCarteira = () => {
 
         // A variável 'carteira' (para exibição) agora é derivada do histórico completo toda vez que renderizamos.
         const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
+
         carteira = historicoCompletoCarteira
             .filter(posicaoApi => parseFloat(posicaoApi.qtd_carteira) > 0) // Filtra apenas posições com quantidade > 0
             .map(posicaoApi => {
                 const ativoInfo = ativosCadastrados.find(a => a.ticker === posicaoApi.ticker) || {};
+                console.log(ativoInfo);
                 return {
                     ...ativoInfo,
                     ticker: posicaoApi.ticker,
+                    classe_b3: ativoInfo.classe_b3, // Adiciona explicitamente a classe do ativo
                     quantidade: parseFloat(posicaoApi.qtd_carteira),
                     custoTotal: parseFloat(posicaoApi.total_investido),
                     lucroInvestimento: parseFloat(posicaoApi.lucro_investimento || 0)
@@ -131,6 +135,51 @@ export const initCarteira = () => {
     };
 
     /**
+     * Atualiza a aparência do modal (título, cor do botão) com base no tipo de operação.
+     * @param {string} tipoOperacao 'compra' ou 'venda'.
+     */
+    const updateTransactionModalUI = (tipoOperacao) => {
+        if (tipoOperacao === 'compra') {
+            modalTitle.textContent = 'Registrar Compra';
+            submitBtn.textContent = 'Registrar Compra';
+            submitBtn.classList.remove('btn-danger');
+            submitBtn.classList.add('btn-primary');
+        } else {
+            modalTitle.textContent = 'Registrar Venda';
+            submitBtn.textContent = 'Registrar Venda';
+            submitBtn.classList.remove('btn-primary');
+            submitBtn.classList.add('btn-danger');
+        }
+        // Limpa as informações de contexto ao trocar de aba
+        contextInfo.innerHTML = '';
+    };
+
+    /**
+     * Exibe informações contextuais no modal, como a quantidade de ativos que o usuário possui.
+     */
+    const showContextualInfo = () => {
+        const tipoOperacao = document.querySelector('input[name="portfolioTransactionType"]:checked').value;
+        const ticker = assetSelect.value;
+        const quantidadeInput = document.getElementById('portfolio-quantity-input');
+
+        // Limpa o campo e a validação anterior
+        contextInfo.innerHTML = '';
+        quantidadeInput.removeAttribute('max');
+
+        if (tipoOperacao === 'venda' && ticker) {
+            const posicao = carteira.find(p => p.ticker === ticker);
+            if (posicao) {
+                const precoMedio = posicao.custoTotal / posicao.quantidade;
+                contextInfo.innerHTML = `Você possui <strong>${posicao.quantidade}</strong> cotas a um preço médio de <strong>${formatCurrency(precoMedio)}</strong>.`;
+                
+                // Adiciona validação de 'max' ao campo de quantidade para não vender mais do que tem
+                quantidadeInput.setAttribute('max', posicao.quantidade);
+            }
+        }
+    };
+
+
+    /**
      * Preenche o seletor de ativos no modal de transação com os ativos cadastrados.
      */
     const popularSeletorDeAtivos = () => {
@@ -149,17 +198,24 @@ export const initCarteira = () => {
             listaDeAtivos = window.getCarteira ? window.getCarteira() : [];
             mensagemVazio = 'Nenhum ativo na carteira para vender';
         }
-
+        
         assetSelect.innerHTML = '<option selected disabled value="">Selecione...</option>'; // Limpa e adiciona a opção padrão
-
+        
         if (listaDeAtivos.length === 0) {
             assetSelect.innerHTML = `<option selected disabled value="">${mensagemVazio}</option>`;
         } else {
+            
             listaDeAtivos.forEach(ativo => {
                 const option = new Option(`${ativo.ticker} (${ativo.classe_b3})`, ativo.ticker);
                 assetSelect.add(option);
             });
         }
+
+        // Atualiza a UI do modal (cores e textos)
+        updateTransactionModalUI(tipoOperacao);
+
+        // Atualiza as informações contextuais (se for venda)
+        showContextualInfo();
     };
 
     /**
@@ -306,14 +362,7 @@ export const initCarteira = () => {
         
 
         try {
-            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes`, { // A rota da API
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                throw new Error('Falha ao registrar a movimentação no servidor.');
-            }
+            await api.postMovimentacao(formData);
             console.log('Movimentação registrada com sucesso no back-end.');
 
             // ATUALIZA o histórico local com os dados mais recentes do servidor.
@@ -323,50 +372,66 @@ export const initCarteira = () => {
             // --- LÓGICA PARA MODO OFFLINE ---
             // Se a API falhou, atualizamos o histórico local manualmente.
             const posicaoNoHistorico = historicoCompletoCarteira.find(p => p.ticker === ticker);
-
-            const dadosParaHistorico = {
-                ticker: ticker,
-                qtd_carteira: qtdCarteiraParaApi,
-                total_investido: totalInvestidoParaApi,
-                lucro_investimento: lucroInvestimentoParaApi,
-                // Mantém outros campos que a API normalmente retornaria, se existirem
-                ...(posicaoNoHistorico || {})
-            };
-
+ 
             if (posicaoNoHistorico) {
-                Object.assign(posicaoNoHistorico, dadosParaHistorico);
+                // Se a posição já existe, atualiza os campos com os novos valores calculados.
+                posicaoNoHistorico.qtd_carteira = qtdCarteiraParaApi;
+                posicaoNoHistorico.total_investido = totalInvestidoParaApi;
+                posicaoNoHistorico.lucro_investimento = lucroInvestimentoParaApi;
             } else {
-                historicoCompletoCarteira.push(dadosParaHistorico);
+                // Se é um ativo novo na carteira, adiciona ao histórico.
+                historicoCompletoCarteira.push({
+                    ticker: ticker,
+                    qtd_carteira: qtdCarteiraParaApi,
+                    total_investido: totalInvestidoParaApi,
+                    lucro_investimento: lucroInvestimentoParaApi
+                });
             }
         }
 
         transactionForm.reset(); // Limpa o formulário para a próxima operação
         renderCarteira(); // Atualiza a exibição da carteira
         transactionModal.hide(); // Fecha o modal
-
-        // Remove o foco do botão de submit para evitar problemas de acessibilidade com o modal oculto
-        event.submitter.blur();
+ 
+        // Remove o foco do botão de submit para evitar o aviso de acessibilidade "descendant retained focus"
+        event.submitter.blur(); 
 
     };
 
     // Adiciona um listener para popular o seletor toda vez que o modal for aberto
-    transactionModalEl.addEventListener('show.bs.modal', popularSeletorDeAtivos);
+    transactionModalEl.addEventListener('show.bs.modal', () => {
+        // Garante que a aba de compra esteja selecionada por padrão ao abrir
+        document.getElementById('buy-radio').checked = true;
+        popularSeletorDeAtivos();
+    });
 
     // Adiciona listeners para os botões de rádio (Compra/Venda)
     // para atualizar o dropdown dinamicamente quando o tipo de operação muda.
-    document.querySelectorAll('input[name="portfolioTransactionType"]').forEach(radio => {
-        radio.addEventListener('change', popularSeletorDeAtivos);
-    });
+    document.querySelectorAll('input[name="portfolioTransactionType"]').forEach(radio => radio.addEventListener('change', popularSeletorDeAtivos));
+
+    // Adiciona um listener para o seletor de ativos para mostrar info contextual
+    assetSelect.addEventListener('change', showContextualInfo);
 
     // Adiciona um listener para o envio do formulário de transação
     transactionForm.addEventListener('submit', handleTransactionSubmit);
+
+    // Adiciona um listener para o evento 'hide.bs.modal', que dispara ANTES do modal ser ocultado.
+    // Isso resolve o aviso de acessibilidade "descendant retained focus" de forma definitiva,
+    // removendo o foco do elemento ativo (ex: botão "Cancelar") antes que o modal seja marcado como oculto.
+    transactionModalEl.addEventListener('hide.bs.modal', () => {
+        if (document.activeElement && transactionModalEl.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
+    });
 
     /**
      * Função de inicialização principal para o módulo da carteira.
      */
     const init = async () => {
         await loadInitialCarteira(); // Carrega os dados do back-end
-        renderCarteira(); // Renderiza a carteira com os dados carregados (ou vazia, se falhar)
+        // A renderização inicial foi movida para main.js para garantir que os dados dos ativos
+        // também estejam disponíveis, evitando a condição de corrida.
+        // renderCarteira(); 
     };
 
     // Inicia o módulo

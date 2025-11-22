@@ -1,5 +1,6 @@
 // Exporta a função principal que encapsula toda a lógica deste módulo
 import { formatCurrency } from './utils.js';
+import * as api from './apiService.js'; // Importa nosso novo módulo de serviço
 export function initAtivos() {
 
     // Nosso "banco de dados" local.
@@ -59,15 +60,9 @@ export function initAtivos() {
         // Exibe um indicador de carregamento para o usuário
         ativosContent.innerHTML = `<p class="text-center text-muted mt-3">Carregando ativos...</p>`;
         try {
-            // Usa a URL base do arquivo de configuração e adiciona o endpoint específico.
-            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos`);
-            if (!response.ok) {
-                throw new Error(`Erro na rede: ${response.statusText}`);
-            }
-            const data = await response.json();
+            const ativosFromApi = await api.fetchInitialAtivos();
             // Transforma os dados recebidos da API para o formato que o front-end espera.
-            // A API retorna um objeto { ativos: [...] } e usa 'classe_b3'.
-            ativos = data.ativos.map(ativoFromApi => {
+            ativos = ativosFromApi.map(ativoFromApi => {
                 return {
                     ticker: ativoFromApi.ticker,
                     nome: ativoFromApi.long_name || ativoFromApi.short_name, // Usa o nome longo ou o curto
@@ -100,11 +95,11 @@ export function initAtivos() {
         // Cria um array de Promises, uma para cada requisição de atualização de ativo
         const updatePromises = ativos.map(async (ativo) => {
             try {
-                const data = await fetchAtivoData(ativo.ticker);
-                ativo.nome = data.longName || data.shortName; // Atualiza o nome com os dados da Brapi
-                ativo.valor = data.valor;
-                ativo.logoUrl = data.logoUrl; // Atualiza a URL do logo
-                ativo.changePercent = data.changePercent; // Atualiza a variação percentual
+                const brapiData = await api.fetchBrapiData(ativo.ticker);
+                ativo.nome = brapiData.longName || brapiData.shortName; // Atualiza o nome com os dados da Brapi
+                ativo.valor = brapiData.regularMarketPrice;
+                ativo.logoUrl = brapiData.logourl; // Atualiza a URL do logo
+                ativo.changePercent = brapiData.regularMarketChangePercent; // Atualiza a variação percentual
             } catch (error) {
                 console.warn(`Não foi possível buscar dados para ${ativo.ticker}: ${error}`);
                 // O valor e nome do ativo permanecerão como estavam
@@ -119,37 +114,6 @@ export function initAtivos() {
 
         // Notifica os ouvintes que os valores dos ativos foram atualizados
         assetUpdateListeners.forEach(listener => listener());
-    }
-
-    /**
-     * Busca os dados de um ativo específico (nome e valor) na API da Brapi.
-     * @param {string} ticker O código do ativo a ser buscado.
-     * @returns {Promise<object>} Uma promise que resolve com os dados detalhados do ativo.
-     */
-    async function fetchAtivoData(ticker) {
-        const token = window.APP_CONFIG.BRAPI_TOKEN;
-        const url = `https://brapi.dev/api/quote/${ticker}?token=${token}`;
-
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Falha na requisição para a API Brapi: ${response.statusText}`);
-
-        const data = await response.json();
-        const result = data.results && data.results[0];
-
-        if (!result || data.error) throw new Error(data.error || `Ticker "${ticker}" não encontrado.`);
-
-        // Sanitiza os nomes para remover espaços extras no início, fim e entre as palavras.
-        const longName = result.longName ? result.longName.trim().replace(/\s+/g, ' ') : null;
-        const shortName = result.shortName ? result.shortName.trim().replace(/\s+/g, ' ') : null;
-
-        return {
-            // Retorna ambos os nomes para que o chamador decida qual usar.
-            longName: longName,
-            shortName: shortName,
-            valor: result.regularMarketPrice,
-            logoUrl: result.logourl,
-            changePercent: result.regularMarketChangePercent
-        };
     }
 
     /**
@@ -274,14 +238,14 @@ export function initAtivos() {
                 let dadosExternos;
                 try {
                     // 1. Tenta buscar dados da API externa para validar o ticker e obter dados de mercado.
-                    dadosExternos = await fetchAtivoData(newTicker);
+                    const brapiData = await api.fetchBrapiData(newTicker);
+                    dadosExternos = { ...brapiData }; // Copia os dados para um objeto local
                 } catch (apiError) {
                     console.warn('Falha ao buscar dados na API externa durante a atualização:', apiError.message);
                     if (window.APP_CONFIG.MANTER_INTEGRIDADE_DADOS) {
                         // 2a. Se a integridade está ATIVA, a operação falha.
                         throw new Error(`O ticker "${newTicker}" não foi encontrado ou a API externa falhou. A verificação de integridade está ativa.`);
                     } else {
-                        // 2b. Se a integridade está DESATIVADA, continua com dados de mercado vazios.
                         console.log('Verificação de integridade desativada. Prosseguindo com a atualização local.');
                         dadosExternos = { longName: null, shortName: null, logoUrl: null, valor: null, changePercent: null };
                     }
@@ -301,16 +265,7 @@ export function initAtivos() {
                 let ativoAtualizado;
                 try {
                     // 4. TENTA enviar a requisição PATCH para o back-end.
-                    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos?ticker=${currentEditTicker}`, {
-                        method: 'PATCH',
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Falha ao atualizar o ativo no servidor.');
-                    }
-                    ativoAtualizado = await response.json();
+                    ativoAtualizado = await api.patchAtivo(currentEditTicker, formData);
 
                 } catch (backendError) {
                     // 5. Se o back-end falhar, avisa no console e cria um objeto local para a UI.
@@ -331,10 +286,10 @@ export function initAtivos() {
                     // Atualiza o nome apenas se um novo nome foi fornecido. Senão, mantém o antigo.
                     assetToUpdate.nome = ativoAtualizado.long_name || ativoAtualizado.short_name || assetToUpdate.nome;
                     assetToUpdate.classe_b3 = ativoAtualizado.classe_b3;
-                    // Atualiza também os dados de mercado
-                    assetToUpdate.logoUrl = dadosExternos.logoUrl;
-                    assetToUpdate.valor = dadosExternos.valor;
-                    assetToUpdate.changePercent = dadosExternos.changePercent;
+                    // Atualiza também os dados de mercado (usando os nomes corretos da Brapi)
+                    assetToUpdate.logoUrl = dadosExternos.logourl;
+                    assetToUpdate.valor = dadosExternos.regularMarketPrice;
+                    assetToUpdate.changePercent = dadosExternos.regularMarketChangePercent;
                 }
 
                 // Re-renderiza a lista e fecha o modal
@@ -363,7 +318,8 @@ export function initAtivos() {
 
                 try {
                     // 1. SEMPRE tenta buscar os dados na API externa primeiro.
-                    dadosExternos = await fetchAtivoData(newTicker);
+                    const brapiData = await api.fetchBrapiData(newTicker);
+                    dadosExternos = { ...brapiData };
                 } catch (apiError) {
                     // 2. Se a busca falhar, AQUI verificamos a configuração de integridade.
                     console.warn('Falha ao buscar dados na API externa:', apiError.message);
@@ -389,15 +345,7 @@ export function initAtivos() {
 
                 try {
                     // 5. TENTA enviar para o nosso back-end.
-                    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos`, {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!response.ok) throw new Error('O servidor respondeu com um erro.');
-
-                    ativoCriado = await response.json();
-
+                    ativoCriado = await api.postAtivo(formData);
                 } catch (backendError) {
                     // 6. Se o back-end falhar, exibe um aviso, mas NÃO interrompe a operação.
                     console.warn(`Falha ao comunicar com o back-end: ${backendError.message}. O ativo será adicionado apenas localmente.`);
@@ -415,9 +363,9 @@ export function initAtivos() {
                     ticker: ativoCriado.ticker,
                     nome: ativoCriado.long_name || ativoCriado.short_name, // Usa o nome que veio do back-end
                     classe_b3: ativoCriado.classe_b3,
-                    logoUrl: dadosExternos.logoUrl,
-                    valor: dadosExternos.valor,
-                    changePercent: dadosExternos.changePercent
+                    logoUrl: dadosExternos.logourl,
+                    valor: dadosExternos.regularMarketPrice,
+                    changePercent: dadosExternos.regularMarketChangePercent
                 };
                 ativos.push(novoAtivoParaLista);
                 renderAtivos();
@@ -442,11 +390,7 @@ export function initAtivos() {
 
         if (isConfirmed) {
             try {
-                const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/ativos?ticker=${currentEditTicker}`, {
-                    method: 'DELETE'
-                });
-
-                if (!response.ok) throw new Error('Falha ao excluir o ativo no servidor.');
+                await api.deleteAtivo(currentEditTicker);
 
                 // Apenas se a exclusão no back-end for bem-sucedida, atualiza o front-end
                 ativos = ativos.filter(ativo => ativo.ticker !== currentEditTicker);
@@ -460,6 +404,14 @@ export function initAtivos() {
         }
     });
 
+
+    // Adiciona um listener para o evento 'hide.bs.modal' para resolver o problema de acessibilidade.
+    // Remove o foco do elemento ativo dentro do modal antes que ele seja ocultado.
+    addAssetModalEl.addEventListener('hide.bs.modal', () => {
+        if (document.activeElement && addAssetModalEl.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
+    });
 
     // Reinicia o modal para o estado de "adição" quando ele é fechado
     addAssetModalEl.addEventListener('hidden.bs.modal', function () {

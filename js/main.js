@@ -21,6 +21,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Aguarda que AMBOS os carregamentos terminem antes de prosseguir
     await Promise.all([carteiraPromise, ativosPromise]);
 
+    // Agora que os dados de ativos e carteira estão carregados, podemos renderizar a carteira com segurança.
+    // A função renderCarteira() precisa ser exposta globalmente para ser chamada aqui.
+    window.renderCarteira();
+
     // Agora que temos certeza que a carteira e os ativos foram carregados,
     // podemos inicializar o módulo de resumo, que depende desses dados.
     initResumo();
