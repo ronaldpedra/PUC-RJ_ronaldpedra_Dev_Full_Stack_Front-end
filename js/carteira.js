@@ -23,55 +23,43 @@ export const initCarteira = () => {
     };
 
     /**
-     * Carrega o estado inicial da carteira a partir do back-end.
-     * Se a API falhar, a aplicação continua funcionando com a carteira vazia.
+     * Busca os dados mais recentes da carteira do back-end e atualiza o estado local.
+     * Esta função será a única fonte da verdade para o histórico da carteira.
      */
-    const loadInitialCarteira = async () => {
-        carteiraContent.innerHTML = `<p class="text-center text-muted mt-3">Carregando carteira...</p>`;
+    const refreshHistoricoCarteira = async () => {
         try {
             const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes/carteira`);
             if (!response.ok) {
                 throw new Error(`Erro na rede: ${response.statusText}`);
             }
             const data = await response.json();
+            historicoCompletoCarteira = data.carteira || []; // Atualiza o histórico completo
+            console.log('Histórico da carteira atualizado:', historicoCompletoCarteira);
 
-            // O back-end agora retorna o estado final, então podemos usá-lo diretamente.
-            historicoCompletoCarteira = data.carteira || []; // Armazena a lista completa
-            const posicoesDaApi = historicoCompletoCarteira; // Usa a lista completa para os cálculos iniciais
-            console.log(posicoesDaApi)
-            if (posicoesDaApi.length === 0) {
-                console.log('Carteira vazia recebida do back-end.');
-                lucroPrejuizoRealizado = 0; // Se não há posições, o lucro é zero.
-                return;
-            }
-
-            // CALCULA o lucro/prejuízo total somando o valor de cada ativo.
-            lucroPrejuizoRealizado = posicoesDaApi.reduce((total, posicao) => {
+            // Recalcula o lucro/prejuízo total com base nos novos dados
+            lucroPrejuizoRealizado = historicoCompletoCarteira.reduce((total, posicao) => {
                 return total + parseFloat(posicao.lucro_investimento || 0);
             }, 0);
 
-            // Mapeia os dados da API para o formato da nossa carteira local,
-            // enriquecendo com dados que já temos no front-end (nome, classe, etc.).
-            const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
-            carteira = posicoesDaApi
-                .filter(posicaoApi => parseFloat(posicaoApi.qtd_carteira) > 0) // Filtra apenas posições com quantidade > 0
-                .map(posicaoApi => {
-                    const ativoInfo = ativosCadastrados.find(a => a.ticker === posicaoApi.ticker) || {};
-                    return {
-                        ...ativoInfo, // Adiciona nome, classe_b3, etc.
-                        ticker: posicaoApi.ticker,
-                        quantidade: parseFloat(posicaoApi.qtd_carteira),
-                        custoTotal: parseFloat(posicaoApi.total_investido),
-                        lucroInvestimento: parseFloat(posicaoApi.lucro_investimento || 0) // Armazena o lucro por ativo
-                    };
-                });
-            console.log(carteira)
-            console.log('Carteira reconstruída a partir do back-end:', carteira);
-            console.log('Lucro/Prejuízo realizado carregado:', lucroPrejuizoRealizado);
-
         } catch (error) {
-            console.warn(`AVISO: Falha ao carregar a carteira do back-end (${error.message}). A aplicação iniciará com a carteira vazia.`);
-            // Não é preciso fazer nada aqui, a carteira e o lucro/prejuízo já estão inicializados como vazios.
+            console.warn(`AVISO: Falha ao atualizar o histórico da carteira do back-end (${error.message}). A aplicação continuará com os dados locais.`);
+            // Em caso de falha, não fazemos nada, mantendo o estado local atual.
+        }
+    };
+
+    /**
+     * Carrega o estado inicial da carteira e renderiza pela primeira vez.
+     */
+    const loadInitialCarteira = async () => {
+        carteiraContent.innerHTML = `<p class="text-center text-muted mt-3">Carregando carteira...</p>`;
+        
+        // Busca os dados iniciais
+        await refreshHistoricoCarteira();
+
+        // Se o histórico veio vazio, encerra.
+        if (historicoCompletoCarteira.length === 0) {
+            console.log('Carteira vazia recebida do back-end.');
+            return;
         }
     };
 
@@ -82,6 +70,21 @@ export const initCarteira = () => {
     const renderCarteira = () => {
         // Notifica os "ouvintes" PRIMEIRO para que outros componentes (como o Resumo) possam se atualizar
         portfolioUpdateListeners.forEach(listener => listener());
+
+        // A variável 'carteira' (para exibição) agora é derivada do histórico completo toda vez que renderizamos.
+        const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
+        carteira = historicoCompletoCarteira
+            .filter(posicaoApi => parseFloat(posicaoApi.qtd_carteira) > 0) // Filtra apenas posições com quantidade > 0
+            .map(posicaoApi => {
+                const ativoInfo = ativosCadastrados.find(a => a.ticker === posicaoApi.ticker) || {};
+                return {
+                    ...ativoInfo,
+                    ticker: posicaoApi.ticker,
+                    quantidade: parseFloat(posicaoApi.qtd_carteira),
+                    custoTotal: parseFloat(posicaoApi.total_investido),
+                    lucroInvestimento: parseFloat(posicaoApi.lucro_investimento || 0)
+                };
+            });
 
         // Limpa o conteúdo atual
         carteiraContent.innerHTML = '';
@@ -269,13 +272,14 @@ export const initCarteira = () => {
             if (posicaoExistente.quantidade === 0) {
                 // Se a quantidade zerar, remove o ativo da carteira
                 carteira = carteira.filter(p => p.ticker !== ticker);
+                totalInvestidoParaApi = 0;
             } else {
                 // Se ainda houver cotas, recalcula o custo total para manter o preço médio
                 // Custo Total = Nova Quantidade * Preço Médio Antigo
                 posicaoExistente.custoTotal = new Decimal(posicaoExistente.quantidade).times(precoMedioDec).toDP(8).toNumber(); // Mantém precisão interna maior
                 totalInvestidoParaApi = new Decimal(posicaoExistente.custoTotal).toDP(2).toNumber(); // Arredonda para 2 casas para a API
-                qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a quantidade restante
             }
+            qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a quantidade restante
             // Adiciona o resultado da operação ao acumulador global de lucro/prejuízo.
             lucroPrejuizoRealizado = new Decimal(lucroPrejuizoRealizado).plus(lucroOperacaoDec).toNumber();
         }
@@ -293,6 +297,12 @@ export const initCarteira = () => {
         formData.append('lucro_operacao', lucroOperacaoParaApi);
         formData.append('lucro_investimento', lucroInvestimentoParaApi);
 
+        // Adicione isso antes do try...catch do fetch em handleTransactionSubmit
+        for (var pair of formData.entries()) {
+            console.log(pair[0]+ ': ' + pair[1]);
+        }
+        
+
         try {
             const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes`, { // A rota da API
                 method: 'POST',
@@ -303,8 +313,29 @@ export const initCarteira = () => {
                 throw new Error('Falha ao registrar a movimentação no servidor.');
             }
             console.log('Movimentação registrada com sucesso no back-end.');
+
+            // ATUALIZA o histórico local com os dados mais recentes do servidor.
+            await refreshHistoricoCarteira();
         } catch (error) {
             console.warn(`AVISO: ${error.message} A operação foi registrada apenas localmente.`);
+            // --- LÓGICA PARA MODO OFFLINE ---
+            // Se a API falhou, atualizamos o histórico local manualmente.
+            const posicaoNoHistorico = historicoCompletoCarteira.find(p => p.ticker === ticker);
+
+            const dadosParaHistorico = {
+                ticker: ticker,
+                qtd_carteira: qtdCarteiraParaApi,
+                total_investido: totalInvestidoParaApi,
+                lucro_investimento: lucroInvestimentoParaApi,
+                // Mantém outros campos que a API normalmente retornaria, se existirem
+                ...(posicaoNoHistorico || {})
+            };
+
+            if (posicaoNoHistorico) {
+                Object.assign(posicaoNoHistorico, dadosParaHistorico);
+            } else {
+                historicoCompletoCarteira.push(dadosParaHistorico);
+            }
         }
 
         transactionForm.reset(); // Limpa o formulário para a próxima operação
