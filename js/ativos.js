@@ -1,4 +1,5 @@
 // Exporta a função principal que encapsula toda a lógica deste módulo
+import { formatCurrency } from './utils.js';
 export function initAtivos() {
 
     // Nosso "banco de dados" local.
@@ -184,7 +185,7 @@ export function initAtivos() {
             // Prepara a exibição do valor e da variação
             let valorEVariacaoHTML = `<span class="badge bg-secondary rounded-pill">(Valor indisponível)</span>`;
             if (typeof ativo.valor === 'number') {
-                const valorFormatado = `R$ ${ativo.valor.toFixed(2)}`;
+                const valorFormatado = formatCurrency(ativo.valor);
                 let variacaoHTML = '';
 
                 if (typeof ativo.changePercent === 'number') {

@@ -86,8 +86,10 @@
                         <h3>Resumo dos Investimentos</h3>
                     </div>
                     <div class="card-body" id="resumo-content">
-                        <p>Principais indicadores e performance geral dos seus investimentos.</p>
-                        <!-- Indicadores de resumo virão aqui -->
+                        <!-- Indicadores principais (Valor Total, Lucro) virão aqui -->
+                        <div id="resumo-indicadores"></div>
+                        <!-- O gráfico de distribuição será renderizado aqui -->
+                        <div id="resumo-grafico-container" class="mt-3"></div>
                     </div>
                 </div>
             </div>
@@ -215,9 +217,12 @@
         </script>
     <!-- Decimal.js para cálculos financeiros precisos -->
     <script src="https://cdn.jsdelivr.net/npm/decimal.js@10.4.3/decimal.min.js"></script>
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <!-- É preciso garantir que config.js seja carregado pelo navegador antes do seu arquivo main.js.-->
     <script src="js/config.js"></script>
     <script type="module" src="./js/configuracoes.js"></script>
+    <script type="module" src="./js/utils.js"></script>
     <script type="module" src="./js/main.js"></script>
 </body>
 

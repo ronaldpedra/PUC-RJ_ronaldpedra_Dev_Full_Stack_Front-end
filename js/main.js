@@ -6,6 +6,8 @@ import { initCarteira } from './carteira.js';
 import { initResumo } from './resumo.js';
 // Importa a função de inicialização do módulo de configurações
 import { initConfiguracoes } from './configuracoes.js';
+// Importa as funções de utilidade (neste caso, apenas para garantir o carregamento do módulo)
+import './utils.js';
 
 // Aguarda o DOM carregar para garantir que todos os elementos HTML estejam disponíveis
 document.addEventListener('DOMContentLoaded', async () => {

@@ -1,29 +1,115 @@
+import { formatCurrency } from './utils.js';
+
 export const initResumo = () => {
-    // Seleciona o contêiner onde o resumo será exibido
-    const resumoContent = document.getElementById('resumo-content');
+    // Seleciona os contêineres onde os componentes do resumo serão exibidos
+    const resumoIndicadoresContent = document.getElementById('resumo-indicadores');
+    const resumoGraficoContainer = document.getElementById('resumo-grafico-container');
+
+    // Variável para manter a instância do gráfico e destruí-la antes de renderizar um novo
+    let distributionChart = null;
+
+    /**
+     * Renderiza o gráfico de pizza (Doughnut) com a distribuição de ativos.
+     * @param {object} resumoPorClasse Dados agregados por classe de ativo.
+     */
+    const renderDistributionChart = (resumoPorClasse) => {
+        // Limpa o contêiner e destrói o gráfico anterior, se existir
+        resumoGraficoContainer.innerHTML = '';
+        if (distributionChart) {
+            distributionChart.destroy();
+        }
+
+        // Filtra apenas as classes que têm ativos e prepara os dados para o gráfico
+        const labels = Object.keys(resumoPorClasse).filter(classe => resumoPorClasse[classe].count > 0);
+        const data = labels.map(classe => resumoPorClasse[classe].total);
+
+        // Se não houver dados para o gráfico, não renderiza nada.
+        if (labels.length === 0) {
+            return;
+        }
+
+        // Adiciona o elemento canvas ao contêiner
+        resumoGraficoContainer.innerHTML = '<canvas id="distributionChartCanvas"></canvas>';
+        const ctx = document.getElementById('distributionChartCanvas').getContext('2d');
+
+        // Cria o gráfico usando Chart.js
+        distributionChart = new Chart(ctx, {
+            type: 'doughnut', // Tipo de gráfico: rosca (similar a pizza)
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Valor por Classe',
+                    data: data,
+                    // Cores pré-definidas para as classes de ativos
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.7)',  // Azul para Ações
+                        'rgba(255, 99, 132, 0.7)',   // Vermelho para FII
+                        'rgba(75, 192, 192, 0.7)',   // Verde para ETF
+                        'rgba(255, 206, 86, 0.7)',  // Amarelo para BDR
+                    ],
+                    borderColor: [
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(255, 206, 86, 1)',
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top', // Posição da legenda
+                    },
+                    title: {
+                        display: true,
+                        text: 'Distribuição por Classe de Ativo' // Título do gráfico
+                    }
+                }
+            }
+        });
+    };
 
     /**
      * Calcula e renderiza os principais indicadores do resumo da carteira.
      */
     const renderResumo = () => {
-        // Busca os dados da carteira através da função global
         const carteira = window.getCarteira ? window.getCarteira() : [];
-        // Busca os dados dos ativos cadastrados para obter a classe
         const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
-        // Busca o lucro/prejuízo realizado
         const lucroPrejuizo = window.getLucroPrejuizo ? window.getLucroPrejuizo() : 0;
 
-        // Limpa o conteúdo atual
-        resumoContent.innerHTML = '';
+        // Limpa o conteúdo dos indicadores
+        resumoIndicadoresContent.innerHTML = '';
 
         // Só exibe a mensagem de "vazia" se a carteira estiver vazia E não houver histórico de lucro/prejuízo
         if (carteira.length === 0 && lucroPrejuizo === 0) {
-            resumoContent.innerHTML = '<p class="text-center text-muted mt-3">A carteira está vazia.</p>';
+            resumoIndicadoresContent.innerHTML = '<p class="text-center text-muted mt-3">A carteira está vazia.</p>';
+            // Limpa também o gráfico
+            renderDistributionChart({});
             return;
         }
 
         // 1. Calcula o Valor Total Investido
         const valorTotalInvestido = carteira.reduce((total, posicao) => total + posicao.custoTotal, 0);
+
+        // 2. Calcula o Valor de Mercado Total da Carteira
+        const valorDeMercadoTotal = carteira.reduce((total, posicao) => {
+            const ativoInfo = ativosCadastrados.find(a => a.ticker === posicao.ticker);
+            // Se o ativo correspondente for encontrado e tiver um valor de mercado válido
+            if (ativoInfo && typeof ativoInfo.valor === 'number') {
+                // Multiplica a quantidade de cotas pelo valor de mercado atual do ativo
+                return total + (posicao.quantidade * ativoInfo.valor);
+            }
+            // Se não encontrar o valor, soma o custo total para não distorcer o cálculo da valorização
+            return total + posicao.custoTotal;
+        }, 0);
+
+        // 3. Calcula a diferença (valorização/desvalorização) e a variação percentual
+        const diferencaValor = valorDeMercadoTotal - valorTotalInvestido;
+        const variacaoPercentual = valorTotalInvestido > 0 ? (diferencaValor / valorTotalInvestido) * 100 : 0;
+        const valorizacaoBadgeColor = diferencaValor >= 0 ? 'bg-success' : 'bg-danger';
+        const valorizacaoIcon = diferencaValor >= 0 ? 'bi-arrow-up-right' : 'bi-arrow-down-right';
 
         // 2. Prepara a estrutura para agrupar por classe
         const resumoPorClasse = {
@@ -46,45 +132,36 @@ export const initResumo = () => {
         const lucroPrejuizoBadgeColor = lucroPrejuizo >= 0 ? 'bg-success' : 'bg-danger';
 
         // Cria o HTML para exibir os indicadores
-        let resumoHTML = `
+        const indicadoresHTML = `
             <ul class="list-group list-group-flush">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <strong>Valor Total Investido</strong>
-                    <span class="badge bg-success rounded-pill fs-6">R$ ${valorTotalInvestido.toFixed(2)}</span>
+                    <span>Valor Total Investido</span>
+                    <span class="badge bg-secondary rounded-pill fs-6">${formatCurrency(valorTotalInvestido)}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <strong>Valor de Mercado</strong>
+                    <span class="badge bg-primary rounded-pill fs-6">${formatCurrency(valorDeMercadoTotal)}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <strong>Valorização da Carteira</strong>
+                    <span class="badge ${valorizacaoBadgeColor} rounded-pill fs-6">
+                        ${formatCurrency(diferencaValor)}
+                        <small class="ms-2"><i class="bi ${valorizacaoIcon}"></i> ${variacaoPercentual.toFixed(2)}%</small>
+                    </span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <strong>Lucro / Prejuízo Realizado</strong>
                     <span class="badge ${lucroPrejuizoBadgeColor} rounded-pill fs-6">
-                        R$ ${lucroPrejuizo.toFixed(2)}
+                        ${formatCurrency(lucroPrejuizo)}
                     </span>
-                </li>
-                <li class="list-group-item">
-                    <strong class="d-block mb-2">Distribuição por Classe:</strong>
-                    <ul class="list-group">
-        `;
-
-        // 4. Adiciona a lista de classes ao HTML
-        Object.keys(resumoPorClasse).forEach(classe => {
-            const { count, total } = resumoPorClasse[classe];
-            if (count > 0) { // Só exibe a classe se houver ativos dela na carteira
-                resumoHTML += `
-                    <li class="list-group-item d-flex justify-content-between align-items-center ps-0 border-0">
-                        ${classe}
-                        <span class="badge bg-secondary rounded-pill">
-                            ${count} ativo(s) / R$ ${total.toFixed(2)}
-                        </span>
-                    </li>
-                `;
-            }
-        });
-
-        resumoHTML += `
-                    </ul>
                 </li>
             </ul>    
         `;
 
-        resumoContent.innerHTML = resumoHTML;
+        resumoIndicadoresContent.innerHTML = indicadoresHTML;
+
+        // Chama a função para renderizar o gráfico com os dados calculados
+        renderDistributionChart(resumoPorClasse);
     };
 
     // Registra a função renderResumo para ser chamada sempre que a carteira for atualizada

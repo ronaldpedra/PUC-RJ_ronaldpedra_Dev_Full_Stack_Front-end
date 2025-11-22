@@ -1,3 +1,5 @@
+import { formatCurrency } from './utils.js';
+
 export const initCarteira = () => {
     // Seleciona os elementos do DOM
     const carteiraContent = document.querySelector('#carteira-content');
@@ -113,10 +115,10 @@ export const initCarteira = () => {
                 </div>
                 <div class="text-end">
                     <span class="badge bg-primary rounded-pill">
-                        PM: R$ ${precoMedio.toFixed(2)}
+                        PM: ${formatCurrency(precoMedio)}
                     </span>
                     <div>
-                        <small class="text-muted">Total: R$ ${posicao.custoTotal.toFixed(2)}</small>
+                        <small class="text-muted">Total: ${formatCurrency(posicao.custoTotal)}</small>
                     </div>
                 </div>
             `;
