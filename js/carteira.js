@@ -8,6 +8,8 @@ export const initCarteira = () => {
 
     // "Banco de dados" local da carteira
     let carteira = [];
+    // Armazena a lista completa da API, incluindo ativos com qtd 0, para preservar o histórico de lucro.
+    let historicoCompletoCarteira = [];
     // Variável para acumular o resultado de todas as vendas
     let lucroPrejuizoRealizado = 0;
     // Lista de "ouvintes" que serão notificados quando a carteira for atualizada
@@ -34,7 +36,8 @@ export const initCarteira = () => {
             const data = await response.json();
 
             // O back-end agora retorna o estado final, então podemos usá-lo diretamente.
-            const posicoesDaApi = data.carteira || [];
+            historicoCompletoCarteira = data.carteira || []; // Armazena a lista completa
+            const posicoesDaApi = historicoCompletoCarteira; // Usa a lista completa para os cálculos iniciais
             console.log(posicoesDaApi)
             if (posicoesDaApi.length === 0) {
                 console.log('Carteira vazia recebida do back-end.');
@@ -126,13 +129,28 @@ export const initCarteira = () => {
      * Preenche o seletor de ativos no modal de transação com os ativos cadastrados.
      */
     const popularSeletorDeAtivos = () => {
-        const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
+        // Verifica qual tipo de operação está selecionada
+        const tipoOperacao = document.querySelector('input[name="portfolioTransactionType"]:checked').value;
+
+        let listaDeAtivos;
+        let mensagemVazio;
+
+        if (tipoOperacao === 'compra') {
+            // Para COMPRA, usa todos os ativos cadastrados
+            listaDeAtivos = window.getAtivos ? window.getAtivos() : [];
+            mensagemVazio = 'Nenhum ativo cadastrado';
+        } else {
+            // Para VENDA, usa apenas os ativos da carteira
+            listaDeAtivos = window.getCarteira ? window.getCarteira() : [];
+            mensagemVazio = 'Nenhum ativo na carteira para vender';
+        }
+
         assetSelect.innerHTML = '<option selected disabled value="">Selecione...</option>'; // Limpa e adiciona a opção padrão
 
-        if (ativosCadastrados.length === 0) {
-            assetSelect.innerHTML = '<option selected disabled value="">Nenhum ativo cadastrado</option>';
+        if (listaDeAtivos.length === 0) {
+            assetSelect.innerHTML = `<option selected disabled value="">${mensagemVazio}</option>`;
         } else {
-            ativosCadastrados.forEach(ativo => {
+            listaDeAtivos.forEach(ativo => {
                 const option = new Option(`${ativo.ticker} (${ativo.classe_b3})`, ativo.ticker);
                 assetSelect.add(option);
             });
@@ -171,7 +189,10 @@ export const initCarteira = () => {
         let qtdCarteiraParaApi = 0; // Novo campo para a quantidade final em carteira
 
         if (tipoOperacao === 'compra') {
+            // Procura na carteira ATUAL (apenas ativos com qtd > 0)
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
+            // Procura no histórico COMPLETO para encontrar o lucro de um ativo que pode ter sido zerado
+            const posicaoHistorica = historicoCompletoCarteira.find(p => p.ticker === ticker);
             console.log(posicaoExistente || 'Nenhuma posição encontrada')
             if (posicaoExistente) {
                 // Se já tem o ativo, atualiza a posição
@@ -187,7 +208,7 @@ export const initCarteira = () => {
                 totalInvestidoParaApi = novoCustoTotalDec.toDP(2).toNumber(); // Arredonda para 2 casas decimais
                 qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a nova quantidade
                 // Na compra, o lucro realizado do ativo não muda. Apenas o reenviamos.
-                lucroInvestimentoParaApi = posicaoExistente.lucroInvestimento || 0;
+                lucroInvestimentoParaApi = posicaoHistorica ? parseFloat(posicaoHistorica.lucro_investimento || 0) : 0;
             } else {
                 // Se não tem, adiciona uma nova posição
                 // Busca a informação completa do ativo para incluir a classe na carteira
@@ -196,16 +217,19 @@ export const initCarteira = () => {
                     alert(`Erro: Não foi possível encontrar as informações do ativo ${ticker}. A operação foi cancelada.`);
                     return;
                 }
+                // Pega o lucro histórico, se houver. Se não, é 0.
+                const lucroAnterior = posicaoHistorica ? parseFloat(posicaoHistorica.lucro_investimento || 0) : 0;
+
                 carteira.push({
                     ...ativoInfo, // Inclui todas as propriedades do ativo (ticker, nome, classe_b3)
                     quantidade: quantidade,
                     custoTotal: totalOperacaoDec.toNumber(),
-                    lucroInvestimento: 0 // Ativo novo, lucro realizado é zero
+                    lucroInvestimento: lucroAnterior // Persiste o lucro anterior
                 });
                 precoMedioParaApi = precoDec.toDP(8).toNumber();
                 totalInvestidoParaApi = totalOperacaoDec.toDP(2).toNumber(); // Arredonda para 2 casas decimais
                 qtdCarteiraParaApi = quantidade; // A quantidade final é a quantidade da primeira compra
-                lucroInvestimentoParaApi = 0; // Para um ativo novo, o lucro é 0.
+                lucroInvestimentoParaApi = lucroAnterior; // Envia o lucro anterior para a API
             }
         } else if (tipoOperacao === 'venda') {
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
@@ -252,11 +276,8 @@ export const initCarteira = () => {
                 totalInvestidoParaApi = new Decimal(posicaoExistente.custoTotal).toDP(2).toNumber(); // Arredonda para 2 casas para a API
                 qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a quantidade restante
             }
-
-            // ATUALIZA O LUCRO/PREJUÍZO GLOBAL PARA O RESUMO
-            lucroPrejuizoRealizado = carteira.reduce((total, p) => {
-                return total + (p.lucroInvestimento || 0);
-            }, 0);
+            // Adiciona o resultado da operação ao acumulador global de lucro/prejuízo.
+            lucroPrejuizoRealizado = new Decimal(lucroPrejuizoRealizado).plus(lucroOperacaoDec).toNumber();
         }
 
         // Prepara os dados para enviar ao back-end
@@ -267,7 +288,6 @@ export const initCarteira = () => {
         formData.append('qtd_carteira', qtdCarteiraParaApi); // Novo campo com a quantidade final
         formData.append('ticker', ticker);
         formData.append('valor', precoDec.toNumber()); // Preço unitário da operação
-        // --- NOVOS CAMPOS PARA O BACK-END ---
         formData.append('total_operacao', totalOperacaoDec.toNumber()); // Substitui 'valor_total'
         formData.append('total_investido', totalInvestidoParaApi);
         formData.append('lucro_operacao', lucroOperacaoParaApi);
@@ -298,6 +318,12 @@ export const initCarteira = () => {
 
     // Adiciona um listener para popular o seletor toda vez que o modal for aberto
     transactionModalEl.addEventListener('show.bs.modal', popularSeletorDeAtivos);
+
+    // Adiciona listeners para os botões de rádio (Compra/Venda)
+    // para atualizar o dropdown dinamicamente quando o tipo de operação muda.
+    document.querySelectorAll('input[name="portfolioTransactionType"]').forEach(radio => {
+        radio.addEventListener('change', popularSeletorDeAtivos);
+    });
 
     // Adiciona um listener para o envio do formulário de transação
     transactionForm.addEventListener('submit', handleTransactionSubmit);
