@@ -46,7 +46,7 @@ export async function postAtivo(formData) {
  * @returns {Promise<object>} Uma promise que resolve com o ativo atualizado.
  */
 export async function patchAtivo(ticker, formData) {
-    const response = await fetch(`${API_BASE_URL}/ativos?ticker=${ticker}`, {
+    const response = await fetch(`${API_BASE_URL}/ativos/?ticker=${ticker}`, {
         method: 'PATCH',
         body: formData
     });
@@ -63,7 +63,7 @@ export async function patchAtivo(ticker, formData) {
  * @returns {Promise<object>} Uma promise que resolve com a resposta da exclusão.
  */
 export async function deleteAtivo(ticker) {
-    const response = await fetch(`${API_BASE_URL}/ativos?ticker=${ticker}`, {
+    const response = await fetch(`${API_BASE_URL}/ativos/?ticker=${ticker}`, {
         method: 'DELETE'
     });
     if (!response.ok) {

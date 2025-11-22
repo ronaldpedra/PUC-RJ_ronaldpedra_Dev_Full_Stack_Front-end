@@ -1,4 +1,5 @@
 import { formatCurrency } from './utils.js';
+import * as store from './store.js';
 
 export const initResumo = () => {
     // Seleciona os contêineres onde os componentes do resumo serão exibidos
@@ -75,9 +76,19 @@ export const initResumo = () => {
      * Calcula e renderiza os principais indicadores do resumo da carteira.
      */
     const renderResumo = () => {
-        const carteira = window.getCarteira ? window.getCarteira() : [];
-        const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
-        const lucroPrejuizo = window.getLucroPrejuizo ? window.getLucroPrejuizo() : 0;
+        const historicoCarteira = store.getHistoricoCarteira();
+        const ativosCadastrados = store.getAtivos();
+
+        // Deriva a carteira visível (com quantidade > 0)
+        const carteira = historicoCarteira
+            .filter(p => parseFloat(p.qtd_carteira) > 0)
+            .map(p => ({
+                ...p,
+                custoTotal: parseFloat(p.total_investido),
+                quantidade: parseFloat(p.qtd_carteira) // Garante que a quantidade seja um número
+            }));
+
+        const lucroPrejuizo = historicoCarteira.reduce((total, p) => total + parseFloat(p.lucro_investimento || 0), 0);
 
         // Limpa o conteúdo dos indicadores
         resumoIndicadoresContent.innerHTML = '';
@@ -97,12 +108,12 @@ export const initResumo = () => {
         const valorDeMercadoTotal = carteira.reduce((total, posicao) => {
             const ativoInfo = ativosCadastrados.find(a => a.ticker === posicao.ticker);
             // Se o ativo correspondente for encontrado e tiver um valor de mercado válido
-            if (ativoInfo && typeof ativoInfo.valor === 'number') {
+            if (ativoInfo && typeof ativoInfo.valor === 'number' && typeof posicao.quantidade === 'number') {
                 // Multiplica a quantidade de cotas pelo valor de mercado atual do ativo
                 return total + (posicao.quantidade * ativoInfo.valor);
             }
-            // Se não encontrar o valor, soma o custo total para não distorcer o cálculo da valorização
-            return total + posicao.custoTotal;
+            // Se o valor de mercado do ativo ainda não estiver disponível, não adiciona nada ao total.
+            return total;
         }, 0);
 
         // 3. Calcula a diferença (valorização/desvalorização) e a variação percentual
@@ -164,11 +175,7 @@ export const initResumo = () => {
         renderDistributionChart(resumoPorClasse);
     };
 
-    // Registra a função renderResumo para ser chamada sempre que a carteira for atualizada
-    window.addPortfolioUpdateListener(renderResumo);
-    // Registra a função para ser chamada quando a lista de ativos for carregada/atualizada
-    window.addAssetUpdateListener(renderResumo);
-
-    // Renderiza o estado inicial do resumo assim que o módulo é inicializado.
-    renderResumo();
+    // Inscreve a função de renderização no store.
+    // Ela será chamada automaticamente sempre que o estado (ativos ou carteira) mudar.
+    store.subscribe(renderResumo);
 };
