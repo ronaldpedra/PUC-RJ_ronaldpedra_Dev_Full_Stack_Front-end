@@ -18,7 +18,7 @@ export const initResumo = () => {
 
         // Só exibe a mensagem de "vazia" se a carteira estiver vazia E não houver histórico de lucro/prejuízo
         if (carteira.length === 0 && lucroPrejuizo === 0) {
-            resumoContent.innerHTML = '<p class="text-center text-muted">A carteira está vazia.</p>';
+            resumoContent.innerHTML = '<p class="text-center text-muted mt-3">A carteira está vazia.</p>';
             return;
         }
 
@@ -91,4 +91,7 @@ export const initResumo = () => {
     window.addPortfolioUpdateListener(renderResumo);
     // Registra a função para ser chamada quando a lista de ativos for carregada/atualizada
     window.addAssetUpdateListener(renderResumo);
+
+    // Renderiza o estado inicial do resumo assim que o módulo é inicializado.
+    renderResumo();
 };

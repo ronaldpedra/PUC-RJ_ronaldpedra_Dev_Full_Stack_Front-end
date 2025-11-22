@@ -475,5 +475,6 @@ export function initAtivos() {
     });
 
     // Carrega os dados iniciais do back-end ao invés de renderizar a lista estática
-    loadInitialAtivos();
+    // Retorna a promise para que o chamador possa esperar a conclusão.
+    return loadInitialAtivos();
 }

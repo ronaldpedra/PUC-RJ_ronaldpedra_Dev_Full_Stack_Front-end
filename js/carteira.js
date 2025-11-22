@@ -21,6 +21,58 @@ export const initCarteira = () => {
     };
 
     /**
+     * Carrega o estado inicial da carteira a partir do back-end.
+     * Se a API falhar, a aplicação continua funcionando com a carteira vazia.
+     */
+    const loadInitialCarteira = async () => {
+        carteiraContent.innerHTML = `<p class="text-center text-muted mt-3">Carregando carteira...</p>`;
+        try {
+            const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/movimentacoes/carteira`);
+            if (!response.ok) {
+                throw new Error(`Erro na rede: ${response.statusText}`);
+            }
+            const data = await response.json();
+
+            // O back-end agora retorna o estado final, então podemos usá-lo diretamente.
+            const posicoesDaApi = data.carteira || [];
+            console.log(posicoesDaApi)
+            if (posicoesDaApi.length === 0) {
+                console.log('Carteira vazia recebida do back-end.');
+                lucroPrejuizoRealizado = 0; // Se não há posições, o lucro é zero.
+                return;
+            }
+
+            // CALCULA o lucro/prejuízo total somando o valor de cada ativo.
+            lucroPrejuizoRealizado = posicoesDaApi.reduce((total, posicao) => {
+                return total + parseFloat(posicao.lucro_investimento || 0);
+            }, 0);
+
+            // Mapeia os dados da API para o formato da nossa carteira local,
+            // enriquecendo com dados que já temos no front-end (nome, classe, etc.).
+            const ativosCadastrados = window.getAtivos ? window.getAtivos() : [];
+            carteira = posicoesDaApi
+                .filter(posicaoApi => parseFloat(posicaoApi.qtd_carteira) > 0) // Filtra apenas posições com quantidade > 0
+                .map(posicaoApi => {
+                    const ativoInfo = ativosCadastrados.find(a => a.ticker === posicaoApi.ticker) || {};
+                    return {
+                        ...ativoInfo, // Adiciona nome, classe_b3, etc.
+                        ticker: posicaoApi.ticker,
+                        quantidade: parseFloat(posicaoApi.qtd_carteira),
+                        custoTotal: parseFloat(posicaoApi.total_investido),
+                        lucroInvestimento: parseFloat(posicaoApi.lucro_investimento || 0) // Armazena o lucro por ativo
+                    };
+                });
+            console.log(carteira)
+            console.log('Carteira reconstruída a partir do back-end:', carteira);
+            console.log('Lucro/Prejuízo realizado carregado:', lucroPrejuizoRealizado);
+
+        } catch (error) {
+            console.warn(`AVISO: Falha ao carregar a carteira do back-end (${error.message}). A aplicação iniciará com a carteira vazia.`);
+            // Não é preciso fazer nada aqui, a carteira e o lucro/prejuízo já estão inicializados como vazios.
+        }
+    };
+
+    /**
      * Renderiza a seção da carteira.
      * Inicialmente, exibe uma mensagem se nenhum ativo for encontrado.
      */
@@ -32,7 +84,7 @@ export const initCarteira = () => {
         carteiraContent.innerHTML = '';
 
         if (carteira.length === 0) { // Se a carteira estiver vazia
-            carteiraContent.innerHTML = '<p class="text-center">Nenhum ativo na carteira.</p>';
+            carteiraContent.innerHTML = '<p class="text-center text-muted mt-3">Nenhum ativo na carteira.</p>';
             return; // Encerra a função aqui se a carteira estiver vazia
         }
 
@@ -97,30 +149,45 @@ export const initCarteira = () => {
         const tipoOperacao = new FormData(transactionForm).get('portfolioTransactionType');
         const ticker = assetSelect.value;
         const quantidade = parseFloat(document.getElementById('portfolio-quantity-input').value);
-        const preco = parseFloat(document.getElementById('portfolio-price-input').value);
+        const precoInput = document.getElementById('portfolio-price-input').value;
 
         // Validação simples
-        if (!ticker || !quantidade || !preco || quantidade <= 0 || preco <= 0) {
+        if (!ticker || !quantidade || !precoInput || quantidade <= 0 || parseFloat(precoInput) <= 0) {
             alert('Por favor, preencha todos os campos corretamente.');
             return;
         }
 
+        // --- CÁLCULO PRECISO COM DECIMAL.JS ---
+        // Converte os inputs para o tipo Decimal para garantir a precisão
+        const quantidadeDec = new Decimal(quantidade);
+        const precoDec = new Decimal(precoInput);
+        const totalOperacaoDec = quantidadeDec.times(precoDec); // Usa .times() em vez de '*'
+
         // --- PREPARAÇÃO DOS DADOS PARA O BACK-END ---
-        const totalOperacao = quantidade * preco;
         let precoMedioParaApi = 0;
         let totalInvestidoParaApi = 0;
         let lucroOperacaoParaApi = 0;
         let lucroInvestimentoParaApi = 0;
+        let qtdCarteiraParaApi = 0; // Novo campo para a quantidade final em carteira
 
         if (tipoOperacao === 'compra') {
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
-
+            console.log(posicaoExistente || 'Nenhuma posição encontrada')
             if (posicaoExistente) {
                 // Se já tem o ativo, atualiza a posição
-                posicaoExistente.quantidade += quantidade;
-                posicaoExistente.custoTotal += quantidade * preco;
-                precoMedioParaApi = posicaoExistente.custoTotal / posicaoExistente.quantidade;
-                totalInvestidoParaApi = posicaoExistente.custoTotal; // O novo total investido
+                const custoTotalAnteriorDec = new Decimal(posicaoExistente.custoTotal);
+                const quantidadeAnteriorDec = new Decimal(posicaoExistente.quantidade);
+
+                const novoCustoTotalDec = custoTotalAnteriorDec.plus(totalOperacaoDec); // .plus() em vez de '+'
+                const novaQuantidadeDec = quantidadeAnteriorDec.plus(quantidadeDec);
+
+                posicaoExistente.custoTotal = novoCustoTotalDec.toNumber(); // Armazena como número
+                posicaoExistente.quantidade = novaQuantidadeDec.toNumber();
+                precoMedioParaApi = novoCustoTotalDec.dividedBy(novaQuantidadeDec).toDP(8).toNumber(); // .dividedBy() em vez de '/' e define 8 casas decimais
+                totalInvestidoParaApi = novoCustoTotalDec.toDP(2).toNumber(); // Arredonda para 2 casas decimais
+                qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a nova quantidade
+                // Na compra, o lucro realizado do ativo não muda. Apenas o reenviamos.
+                lucroInvestimentoParaApi = posicaoExistente.lucroInvestimento || 0;
             } else {
                 // Se não tem, adiciona uma nova posição
                 // Busca a informação completa do ativo para incluir a classe na carteira
@@ -132,10 +199,13 @@ export const initCarteira = () => {
                 carteira.push({
                     ...ativoInfo, // Inclui todas as propriedades do ativo (ticker, nome, classe_b3)
                     quantidade: quantidade,
-                    custoTotal: quantidade * preco,
+                    custoTotal: totalOperacaoDec.toNumber(),
+                    lucroInvestimento: 0 // Ativo novo, lucro realizado é zero
                 });
-                precoMedioParaApi = preco;
-                totalInvestidoParaApi = quantidade * preco; // O total investido é o valor da primeira compra
+                precoMedioParaApi = precoDec.toDP(8).toNumber();
+                totalInvestidoParaApi = totalOperacaoDec.toDP(2).toNumber(); // Arredonda para 2 casas decimais
+                qtdCarteiraParaApi = quantidade; // A quantidade final é a quantidade da primeira compra
+                lucroInvestimentoParaApi = 0; // Para um ativo novo, o lucro é 0.
             }
         } else if (tipoOperacao === 'venda') {
             const posicaoExistente = carteira.find(p => p.ticker === ticker);
@@ -152,37 +222,53 @@ export const initCarteira = () => {
                 return;
             }
 
-            // Mantém o preço médio original antes de qualquer alteração
-            const precoMedio = precoMedioParaApi = posicaoExistente.custoTotal / posicaoExistente.quantidade;
+            // Calcula o preço médio com precisão
+            const custoTotalDec = new Decimal(posicaoExistente.custoTotal);
+            const quantidadeDecExistente = new Decimal(posicaoExistente.quantidade);
+            const precoMedioDec = custoTotalDec.dividedBy(quantidadeDecExistente);
+            precoMedioParaApi = precoMedioDec.toDP(8).toNumber();
 
             // Calcula o lucro/prejuízo desta operação de venda
-            lucroOperacaoParaApi = (preco - precoMedio) * quantidade;
-            lucroPrejuizoRealizado += lucroOperacaoParaApi;
-            // O lucro total do investimento é o acumulado global
-            lucroInvestimentoParaApi = lucroPrejuizoRealizado;
+            const lucroOperacaoDec = precoDec.minus(precoMedioDec).times(quantidadeDec);
+            lucroOperacaoParaApi = lucroOperacaoDec.toDP(2).toNumber(); // Arredonda para 2 casas para o registro da operação
+
+            // Pega o lucro que o ativo já tinha e soma com o da operação atual
+            const lucroAnteriorDec = new Decimal(posicaoExistente.lucroInvestimento || 0);
+            const novoLucroTotalAtivoDec = lucroAnteriorDec.plus(lucroOperacaoDec);
+
+            posicaoExistente.lucroInvestimento = novoLucroTotalAtivoDec.toNumber(); // Atualiza o estado local
+            lucroInvestimentoParaApi = novoLucroTotalAtivoDec.toDP(2).toNumber(); // Prepara para enviar à API
 
             // Diminui a quantidade
-            posicaoExistente.quantidade -= quantidade;
+            posicaoExistente.quantidade = quantidadeDecExistente.minus(quantidadeDec).toNumber();
 
             if (posicaoExistente.quantidade === 0) {
                 // Se a quantidade zerar, remove o ativo da carteira
                 carteira = carteira.filter(p => p.ticker !== ticker);
             } else {
                 // Se ainda houver cotas, recalcula o custo total para manter o preço médio
-                posicaoExistente.custoTotal = posicaoExistente.quantidade * precoMedio;
-                totalInvestidoParaApi = posicaoExistente.custoTotal;
+                // Custo Total = Nova Quantidade * Preço Médio Antigo
+                posicaoExistente.custoTotal = new Decimal(posicaoExistente.quantidade).times(precoMedioDec).toDP(8).toNumber(); // Mantém precisão interna maior
+                totalInvestidoParaApi = new Decimal(posicaoExistente.custoTotal).toDP(2).toNumber(); // Arredonda para 2 casas para a API
+                qtdCarteiraParaApi = posicaoExistente.quantidade; // A quantidade final é a quantidade restante
             }
+
+            // ATUALIZA O LUCRO/PREJUÍZO GLOBAL PARA O RESUMO
+            lucroPrejuizoRealizado = carteira.reduce((total, p) => {
+                return total + (p.lucroInvestimento || 0);
+            }, 0);
         }
 
         // Prepara os dados para enviar ao back-end
         const formData = new FormData();
         formData.append('movimento', tipoOperacao === 'compra' ? 'Compra' : 'Venda');
         formData.append('preco_medio', precoMedioParaApi);
-        formData.append('quantidade', quantidade);
+        formData.append('qtd_operacao', quantidade); // Campo 'quantidade' renomeado para 'qtd_operacao'
+        formData.append('qtd_carteira', qtdCarteiraParaApi); // Novo campo com a quantidade final
         formData.append('ticker', ticker);
-        formData.append('valor', preco); // Preço unitário da operação
+        formData.append('valor', precoDec.toNumber()); // Preço unitário da operação
         // --- NOVOS CAMPOS PARA O BACK-END ---
-        formData.append('total_operacao', totalOperacao); // Substitui 'valor_total'
+        formData.append('total_operacao', totalOperacaoDec.toNumber()); // Substitui 'valor_total'
         formData.append('total_investido', totalInvestidoParaApi);
         formData.append('lucro_operacao', lucroOperacaoParaApi);
         formData.append('lucro_investimento', lucroInvestimentoParaApi);
@@ -216,6 +302,15 @@ export const initCarteira = () => {
     // Adiciona um listener para o envio do formulário de transação
     transactionForm.addEventListener('submit', handleTransactionSubmit);
 
-    // Renderiza o estado inicial da carteira ao carregar a página
-    renderCarteira();
+    /**
+     * Função de inicialização principal para o módulo da carteira.
+     */
+    const init = async () => {
+        await loadInitialCarteira(); // Carrega os dados do back-end
+        renderCarteira(); // Renderiza a carteira com os dados carregados (ou vazia, se falhar)
+    };
+
+    // Inicia o módulo
+    // Retorna a promise da inicialização para que o chamador possa esperar.
+    return init();
 };

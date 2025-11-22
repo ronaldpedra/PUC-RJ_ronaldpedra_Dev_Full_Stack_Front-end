@@ -8,14 +8,18 @@ import { initResumo } from './resumo.js';
 import { initConfiguracoes } from './configuracoes.js';
 
 // Aguarda o DOM carregar para garantir que todos os elementos HTML estejam disponíveis
-document.addEventListener('DOMContentLoaded', () => {
-    // Inicializa o módulo de ativos
+document.addEventListener('DOMContentLoaded', async () => {
     // Inicializa o módulo de configurações
     initConfiguracoes();
-    // Inicializa o módulo da carteira
-    initCarteira();
-    // Inicializa o módulo de ativos (carrega dados do back-end)
-    initAtivos();
-    // Inicializa o módulo de resumo
+
+    // Inicia o carregamento dos dados da carteira e dos ativos em paralelo
+    const carteiraPromise = initCarteira();
+    const ativosPromise = initAtivos();
+
+    // Aguarda que AMBOS os carregamentos terminem antes de prosseguir
+    await Promise.all([carteiraPromise, ativosPromise]);
+
+    // Agora que temos certeza que a carteira e os ativos foram carregados,
+    // podemos inicializar o módulo de resumo, que depende desses dados.
     initResumo();
 });
