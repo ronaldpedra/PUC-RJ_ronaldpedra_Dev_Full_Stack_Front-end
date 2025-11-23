@@ -37,3 +37,13 @@ export function showAlert(message, type = 'info') {
     // Remove o alerta automaticamente após 5 segundos
     setTimeout(() => wrapper.remove(), 5000);
 }
+
+/**
+ * Limpa uma string de nome, removendo espaços extras no início, fim e entre as palavras.
+ * @param {string | null | undefined} name A string a ser limpa.
+ * @returns {string} A string limpa ou uma string vazia se a entrada for inválida.
+ */
+export const cleanApiName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    return name.trim().replace(/\s+/g, ' ');
+};

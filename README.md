@@ -1,3 +1,6 @@
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Javascript](https://shields.io/badge/JavaScript-F7DF1E?logo=JavaScript&logoColor=000&style=flat-square)
+
 # DashInvest - Dashboard de Investimentos
 
 DashInvest é uma aplicação web de página única (SPA) desenvolvida para auxiliar investidores no acompanhamento de suas carteiras de ações, FIIs, ETFs e BDRs. A plataforma oferece uma visão clara e consolidada dos investimentos, com indicadores de performance e distribuição de ativos em tempo real.

@@ -1,5 +1,5 @@
 // Exporta a função principal que encapsula toda a lógica deste módulo
-import { formatCurrency, showAlert } from './utils.js';
+import { formatCurrency, showAlert, cleanApiName } from './utils.js';
 import * as api from './apiService.js'; // Importa nosso novo módulo de serviço
 import * as store from './store.js'; // Importa o novo store
 export function initAtivos() {
@@ -29,7 +29,7 @@ export function initAtivos() {
             const ativosFormatados = ativosFromApi.map(ativoFromApi => {
                 return {
                     ticker: ativoFromApi.ticker,
-                    nome: ativoFromApi.long_name || ativoFromApi.short_name, // Usa o nome longo ou o curto
+                    nome: cleanApiName(ativoFromApi.long_name) || cleanApiName(ativoFromApi.short_name), // Usa o nome longo ou o curto
                     classe_b3: ativoFromApi.classe_b3, // Mantém o nome original da API
                     logoUrl: null, // Inicializa 'logoUrl' como nulo
                     valor: null, // Inicializa 'valor' como nulo, pois não vem da lista inicial
@@ -57,7 +57,7 @@ export function initAtivos() {
         const updatePromises = ativos.map(async (ativo) => {
             try {
                 const brapiData = await api.fetchBrapiData(ativo.ticker);
-                ativo.nome = brapiData.longName || brapiData.shortName; // Atualiza o nome com os dados da Brapi
+                ativo.nome = cleanApiName(brapiData.longName) || cleanApiName(brapiData.shortName); // Atualiza o nome com os dados da Brapi
                 ativo.valor = brapiData.regularMarketPrice;
                 ativo.logoUrl = brapiData.logourl; // Atualiza a URL do logo
                 ativo.changePercent = brapiData.regularMarketChangePercent; // Atualiza a variação percentual
@@ -204,9 +204,9 @@ export function initAtivos() {
 
         const formData = new FormData();
         formData.append('ticker', newTicker);
-        formData.append('classe_b3', newClass);
-        if (dadosExternos.longName) formData.append('long_name', dadosExternos.longName);
-        if (dadosExternos.shortName) formData.append('short_name', dadosExternos.shortName);
+        formData.append('classe_b3', newClass);        
+        formData.append('long_name', cleanApiName(dadosExternos.longName));
+        formData.append('short_name', cleanApiName(dadosExternos.shortName));
         
         let ativoAtualizado;
         try {
@@ -224,7 +224,7 @@ export function initAtivos() {
         const assetToUpdate = store.getAtivos().find(a => a.ticker === currentTicker);
         if (assetToUpdate) {
             assetToUpdate.ticker = ativoAtualizado.ticker;
-            assetToUpdate.nome = ativoAtualizado.long_name || ativoAtualizado.short_name || assetToUpdate.nome;
+            assetToUpdate.nome = cleanApiName(ativoAtualizado.long_name) || cleanApiName(ativoAtualizado.short_name) || assetToUpdate.nome;
             assetToUpdate.classe_b3 = ativoAtualizado.classe_b3;
             assetToUpdate.logoUrl = dadosExternos.logourl;
             assetToUpdate.valor = dadosExternos.regularMarketPrice;
@@ -261,8 +261,8 @@ export function initAtivos() {
         
         const formData = new FormData();
         formData.append('ticker', newTicker);
-        formData.append('long_name', dadosExternos.longName || '');
-        formData.append('short_name', dadosExternos.shortName || '');
+        formData.append('long_name', cleanApiName(dadosExternos.longName));
+        formData.append('short_name', cleanApiName(dadosExternos.shortName));
         formData.append('classe_b3', newClass);
 
         let ativoCriado;
@@ -270,10 +270,17 @@ export function initAtivos() {
             ativoCriado = await api.postAtivo(formData);
         } catch (backendError) {
             console.warn(`Falha ao comunicar com o back-end: ${backendError.message}. O ativo será adicionado apenas localmente.`);
-            ativoCriado = { ticker: newTicker, long_name: dadosExternos.longName, short_name: dadosExternos.shortName, classe_b3: newClass };
+            ativoCriado = { ticker: newTicker, long_name: cleanApiName(dadosExternos.longName), short_name: cleanApiName(dadosExternos.shortName), classe_b3: newClass };
         }
 
-        const novoAtivoParaLista = { ticker: ativoCriado.ticker, nome: ativoCriado.long_name || ativoCriado.short_name, classe_b3: ativoCriado.classe_b3, logoUrl: dadosExternos.logourl, valor: dadosExternos.regularMarketPrice, changePercent: dadosExternos.regularMarketChangePercent };
+        const novoAtivoParaLista = { 
+            ticker: ativoCriado.ticker, 
+            nome: cleanApiName(ativoCriado.long_name) || cleanApiName(ativoCriado.short_name), 
+            classe_b3: ativoCriado.classe_b3, 
+            logoUrl: dadosExternos.logourl, 
+            valor: dadosExternos.regularMarketPrice, 
+            changePercent: dadosExternos.regularMarketChangePercent 
+        };
         const ativosAtuais = store.getAtivos();
         store.setState({ ativos: [...ativosAtuais, novoAtivoParaLista] });
         showAlert(`Ativo "${novoAtivoParaLista.ticker}" adicionado com sucesso!`, 'success');
