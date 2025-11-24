@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+    
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        
+        <!-- Bootstrap Icons -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+        
+        <link rel="stylesheet" href="./css/styles.css">
+        
+        <title>DashInvest - Dashboard de Investimentos</title>
+    </head>
+    
+    <body>
+        
+        <!-- Cabeçalho do DashInvest - Dashboard de Investimentos -->
+        <header>
+            <div class="banner">
+                <div class="title">
+                    <h1>DashInvest</h1>
+                </div>
+                <!-- Fonte: https://images.pexels.com/photos/6801648/pexels-photo-6801648.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1 -->
+                <img src="./img/invest-banner.webp"
+                alt="Notebook exibindo um dashboard de investimentos com gráficos e dados financeiros.">
+            </div>
+        </header>
+        
+        <!-- Conteúdo Principal -->
+        <main class="container mt-5">
+            <div class="row text-center mb-4">
+                <div class="col">
+                    <h2>Visão Geral da Carteira</h2>
+                    <!-- Container para os alertas dinâmicos -->
+                    <div id="alert-container"></div> 
+            </div>
+        </div>
+        <div class="row">
+            <!-- Coluna de Ativos Cadastrados -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3>Ativos Cadastrados</h3>
+                        <!-- Ícone para abrir o modal de adicionar ativo -->
+                        <div>
+                            <button class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#configModal" title="Configurações">
+                                <i class="bi bi-gear"></i>
+                            </button>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAssetModal" title="Adicionar Ativo">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" id="ativos-content">
+                        <!-- O conteúdo da lista de ativos será inserido aqui via JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna da Carteira -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3>Carteira</h3>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal"
+                            data-bs-target="#portfolioTransactionModal">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                    <div class="card-body" id="carteira-content">
+                        <!-- Gráficos e detalhes da carteira virão aqui -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna de Resumo -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h3>Resumo dos Investimentos</h3>
+                    </div>
+                    <div class="card-body" id="resumo-content">
+                        <p>Principais indicadores e performance geral dos seus investimentos.</p>
+                        <!-- Indicadores de resumo virão aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-dark text-white text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">&copy; 2025 DashInvest. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <!-- Modal para Adicionar Ativo -->
+    <div class="modal fade" id="addAssetModal" tabindex="-1" aria-labelledby="addAssetModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="addAssetModalLabel">Adicionar Novo Ativo</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-asset-form">
+                        <div class="mb-3">
+                            <label for="ticker-input" class="form-label">Ticker do Ativo</label>
+                            <input type="text" class="form-control" id="ticker-input" placeholder="Ex: PETR4" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="class-select" class="form-label">Classe do Ativo</label>
+                            <select class="form-select" id="class-select" required>
+                                <option selected disabled value="">Selecione...</option>
+                                <option value="Ações">Ações</option>
+                                <option value="FII">FII</option>
+                                <option value="ETF">ETF</option>
+                                <option value="BDR">BDR</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger me-auto d-none" id="delete-asset-btn">Excluir</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" form="add-asset-form">Salvar Ativo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Configurações -->
+    <div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="configModalLabel">Configurações</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="integrity-check-toggle">
+                        <label class="form-check-label" for="integrity-check-toggle">Manter a integridade dos dados</label>
+                        <div class="form-text">
+                            Quando ativado, o sistema valida cada novo ativo com uma API externa para garantir que o ticker é válido e buscar dados adicionais. Desative apenas se a API externa estiver fora do ar.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Registrar Operação na Carteira -->
+    <div class="modal fade" id="portfolioTransactionModal" tabindex="-1"
+        aria-labelledby="portfolioTransactionModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h1 class="modal-title fs-5" id="portfolioTransactionModalLabel">Registrar Operação</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="portfolio-transaction-form">
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Operação</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="portfolioTransactionType"
+                                    id="buy-radio" value="compra" checked>
+                                <label class="form-check-label" for="buy-radio">Compra</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="portfolioTransactionType"
+                                    id="sell-radio" value="venda">
+                                <label class="form-check-label" for="sell-radio">Venda</label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-asset-select" class="form-label">Ativo</label>
+                            <select class="form-select" id="portfolio-asset-select" required>
+                                <!-- Opções de ativos serão preenchidas dinamicamente -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-quantity-input" class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="portfolio-quantity-input" min="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="portfolio-price-input" class="form-label">Preço Médio (R$)</label>
+                            <input type="number" class="form-control" id="portfolio-price-input" step="0.01" min="0.01"
+                                required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" form="portfolio-transaction-form">Registrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous">
+        </script>
+    <!-- É preciso garantir que config.js seja carregado pelo navegador antes do seu arquivo main.js.-->
+    <script src="js/config.js"></script>
+    <script type="module" src="./js/configuracoes.js"></script>
+    <script type="module" src="./js/main.js"></script>
+</body>
+
+</html>
