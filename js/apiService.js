@@ -5,7 +5,7 @@
  */
 
 const API_BASE_URL = window.APP_CONFIG.API_BASE_URL;
-const BRAPI_TOKEN = window.APP_CONFIG.BRAPI_TOKEN;
+const API_BRAPI = window.APP_CONFIG.API_BRAPI;
 
 // --- Funções para a API do DashInvest (Back-end) ---
 
@@ -109,7 +109,7 @@ export async function postMovimentacao(formData) {
  * @returns {Promise<object>} Uma promise que resolve com os dados detalhados do ativo.
  */
 export async function fetchBrapiData(ticker) {
-    const url = `https://brapi.dev/api/quote/${ticker}?token=${BRAPI_TOKEN}`;
+    const url = `${API_BRAPI.URL}/${ticker}?token=${API_BRAPI.TOKEN}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Falha na requisição para a API Brapi: ${response.statusText}`);
     const data = await response.json();
