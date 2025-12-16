@@ -83,7 +83,10 @@ Para executar o DashInvest localmente, você precisará de um servidor web simpl
 2.  **Configure as APIs:**
     *   Abra o arquivo `js/config.js`.
     *   Ajuste a `API_BASE_URL` para o endereço onde seu back-end está rodando (ex: `http://127.0.0.1:5000`).
-    *   A `BRAPI_TOKEN` já está configurada com um token público, mas pode ser substituída se necessário.
+    *   IMPORTANTE:
+    *   Para uma melhor experiência é recomendado adquirir (SEM CUSTO) um token em https://brapi.dev
+    *   Sem o token, recomendo fazer os testes com os Ativos: PETR4 (Petrobras) • MGLU3 (Magazine Luiza) • VALE3 (Vale) • ITUB4 (Itaú)
+    *   O token de `API_BRAPI` está vazio (por padrão), mas pode ser substituído se desejado.
 
 3.  **Inicie o servidor:**
     *   Abra a pasta do projeto no VS Code.
